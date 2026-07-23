@@ -78,8 +78,9 @@ jobs:
           if (-not (Test-Path $iscc)) {
             choco install innosetup -y --no-progress
           }
-          $version = $env:GITHUB_REF_NAME
-          if ($version -notlike 'v*') { $version = 'dev' }
+          # Inno's AppVersion wants a bare number; the "v" is re-added to the
+          # output filename by the .iss so assets stay named v1.1.0.
+          $version = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.Substring(1) } else { 'dev' }
           & $iscc "/DAppVersion=$version" "installer\p7m-extractor.iss"
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v4

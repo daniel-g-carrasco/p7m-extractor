@@ -19,7 +19,7 @@ DisableProgramGroupPage=yes
 ; per-user install by default (no UAC); the dialog lets the user elevate
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-OutputBaseFilename=p7m-extractor-setup-{#AppVersion}-windows-x64
+OutputBaseFilename=p7m-extractor-setup-v{#AppVersion}-windows-x64
 SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\p7m-extractor.exe
 Compression=lzma2

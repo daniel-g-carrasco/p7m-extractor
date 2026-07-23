@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 APP_ID = "com.danielgrasso.P7mExtractor"
 
