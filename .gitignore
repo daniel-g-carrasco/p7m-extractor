@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+.venv/
+venv/
+*.zip
+*.tar.gz
+sample.p7m
+sample

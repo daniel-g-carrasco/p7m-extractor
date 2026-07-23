@@ -1,0 +1,114 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tests/test_extract.py
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            zip
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-gobject
+            mingw-w64-x86_64-python-pyinstaller
+      - name: Build with PyInstaller
+        run: pyinstaller --noconfirm --windowed --name p7m-extractor p7m_extractor.py
+      - name: Ensure GLib schemas and icon theme are bundled
+        run: |
+          APPDIR=dist/p7m-extractor/_internal
+          if [ ! -f "$APPDIR/share/glib-2.0/schemas/gschemas.compiled" ]; then
+            mkdir -p "$APPDIR/share/glib-2.0/schemas"
+            cp /mingw64/share/glib-2.0/schemas/gschemas.compiled "$APPDIR/share/glib-2.0/schemas/"
+          fi
+          if [ ! -d "$APPDIR/share/icons/Adwaita" ]; then
+            mkdir -p "$APPDIR/share/icons"
+            cp -r /mingw64/share/icons/Adwaita "$APPDIR/share/icons/"
+          fi
+          if [ ! -d "$APPDIR/share/icons/hicolor" ]; then
+            cp -r /mingw64/share/icons/hicolor "$APPDIR/share/icons/" || true
+          fi
+      - name: Smoke test (CLI through the bundled exe)
+        run: |
+          python tests/test_extract.py --make-sample sample.p7m
+          ./dist/p7m-extractor/p7m-extractor.exe sample.p7m
+          test -f sample
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          case "$VERSION" in v*) ;; *) VERSION=dev ;; esac
+          cd dist && zip -qr "../p7m-extractor-${VERSION}-windows-x64.zip" p7m-extractor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: p7m-extractor-*-windows-x64.zip
+
+  linux:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK 4 and PyGObject
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
+            libgtk-4-1 python3-venv binutils
+      - name: Build with PyInstaller
+        run: |
+          python3 -m venv --system-site-packages .venv
+          .venv/bin/pip install pyinstaller
+          .venv/bin/pyinstaller --noconfirm --windowed --name p7m-extractor p7m_extractor.py
+      - name: Smoke test (CLI through the bundled binary)
+        run: |
+          python3 tests/test_extract.py --make-sample sample.p7m
+          ./dist/p7m-extractor/p7m-extractor sample.p7m
+          test -f sample
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          case "$VERSION" in v*) ;; *) VERSION=dev ;; esac
+          tar -C dist -czf "p7m-extractor-${VERSION}-linux-x64.tar.gz" p7m-extractor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: p7m-extractor-*-linux-x64.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.zip
+            *.tar.gz
+          generate_release_notes: true
