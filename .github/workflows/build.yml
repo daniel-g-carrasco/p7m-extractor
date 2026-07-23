@@ -70,7 +70,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           case "$VERSION" in v*) ;; *) VERSION=dev ;; esac
-          cd dist && zip -qr "../p7m-extractor-${VERSION}-windows-x64.zip" p7m-extractor
+          cd dist && zip -qr "../p7m-extractor-${VERSION}-windows-x64-portable.zip" p7m-extractor
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
@@ -86,7 +86,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64
-          path: p7m-extractor-*-windows-x64.zip
+          path: p7m-extractor-*-windows-x64-portable.zip
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -126,11 +126,11 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           case "$VERSION" in v*) ;; *) VERSION=dev ;; esac
-          tar -C dist -czf "p7m-extractor-${VERSION}-linux-x64.tar.gz" p7m-extractor
+          tar -C dist -czf "p7m-extractor-${VERSION}-linux-x64-portable.tar.gz" p7m-extractor
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x64
-          path: p7m-extractor-*-linux-x64.tar.gz
+          path: p7m-extractor-*-linux-x64-portable.tar.gz
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

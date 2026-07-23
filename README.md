@@ -19,8 +19,8 @@ Grab a build from the
 | Platform | File | Notes |
 |---|---|---|
 | Windows installer | `p7m-extractor-setup-*-windows-x64.exe` | Start menu entry, uninstaller, optional `.p7m` file association (double-click a `.p7m` to extract it) |
-| Windows portable | `p7m-extractor-*-windows-x64.zip` | unzip anywhere, run `p7m-extractor.exe` — no installation, no admin rights |
-| Linux x64 | `p7m-extractor-*-linux-x64.tar.gz` | untar, run `./p7m-extractor` |
+| Windows portable | `p7m-extractor-*-windows-x64-portable.zip` | unzip anywhere, run `p7m-extractor.exe` — no installation, no admin rights |
+| Linux x64 | `p7m-extractor-*-linux-x64-portable.tar.gz` | untar, run `./p7m-extractor` |
 
 Everything (GTK included) ships inside the package. The installer defaults to
 a per-user install, so no administrator rights are needed there either.
