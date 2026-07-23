@@ -34,7 +34,7 @@ jobs:
             mingw-w64-x86_64-gtk4
             mingw-w64-x86_64-python
             mingw-w64-x86_64-python-gobject
-            mingw-w64-x86_64-python-pyinstaller
+            mingw-w64-x86_64-pyinstaller
       - name: Build with PyInstaller
         run: pyinstaller --noconfirm --windowed --name p7m-extractor p7m_extractor.py
       - name: Ensure GLib schemas and icon theme are bundled
