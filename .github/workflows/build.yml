@@ -55,6 +55,12 @@ jobs:
           if [ ! -d "$APPDIR/share/icons/hicolor" ]; then
             cp -r /mingw64/share/icons/hicolor "$APPDIR/share/icons/" || true
           fi
+      - name: Slim the bundle (locales and icon variants the app never loads)
+        run: |
+          I=dist/p7m-extractor/_internal
+          [ -d "$I/share/locale" ] && find "$I/share/locale" -mindepth 1 -maxdepth 1 ! -name it ! -name 'en*' -exec rm -rf {} + || true
+          rm -rf "$I/share/icons/AdwaitaLegacy" "$I/share/icons/Adwaita/cursors" "$I/share/icons/Adwaita/icon-theme.cache"
+          du -sm "$I" | cut -f1 | xargs -I{} echo "bundle after slimming: {} MB"
       - name: Smoke test (CLI through the bundled exe)
         run: |
           python tests/test_extract.py --make-sample sample.p7m
@@ -65,10 +71,25 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           case "$VERSION" in v*) ;; *) VERSION=dev ;; esac
           cd dist && zip -qr "../p7m-extractor-${VERSION}-windows-x64.zip" p7m-extractor
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          $version = $env:GITHUB_REF_NAME
+          if ($version -notlike 'v*') { $version = 'dev' }
+          & $iscc "/DAppVersion=$version" "installer\p7m-extractor.iss"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64
           path: p7m-extractor-*-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer/Output/p7m-extractor-setup-*.exe
 
   linux:
     needs: test
@@ -89,6 +110,12 @@ jobs:
         run: |
           test -f dist/p7m-extractor/_internal/gi_typelibs/Gtk-4.0.typelib
           ls dist/p7m-extractor/_internal/libgtk-4*.so*
+      - name: Slim the bundle (locales and icon variants the app never loads)
+        run: |
+          I=dist/p7m-extractor/_internal
+          [ -d "$I/share/locale" ] && find "$I/share/locale" -mindepth 1 -maxdepth 1 ! -name it ! -name 'en*' -exec rm -rf {} + || true
+          rm -rf "$I/share/icons/AdwaitaLegacy" "$I/share/icons/Adwaita/cursors" "$I/share/icons/Adwaita/icon-theme.cache"
+          du -sm "$I" | cut -f1 | xargs -I{} echo "bundle after slimming: {} MB"
       - name: Smoke test (CLI through the bundled binary)
         run: |
           python3 tests/test_extract.py --make-sample sample.p7m
@@ -119,4 +146,5 @@ jobs:
           files: |
             *.zip
             *.tar.gz
+            *.exe
           generate_release_notes: true

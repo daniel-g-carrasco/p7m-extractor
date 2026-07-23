@@ -18,10 +18,11 @@ import base64
 import binascii
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 APP_ID = "com.danielgrasso.P7mExtractor"
 
@@ -260,7 +261,7 @@ _CSS = b"""
 """
 
 
-def run_gui() -> int:
+def run_gui(initial_paths=()) -> int:
     try:
         import gi
         gi.require_version("Gtk", "4.0")
@@ -286,7 +287,7 @@ def run_gui() -> int:
     has_filedialog = Gtk.check_version(4, 10, 0) is None
 
     class Window(Gtk.ApplicationWindow):
-        def __init__(self, app):
+        def __init__(self, app, initial=()):
             super().__init__(
                 application=app, title="P7M Extractor",
                 default_width=680, default_height=560,
@@ -355,6 +356,10 @@ def run_gui() -> int:
             drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
             drop.connect("drop", self.on_drop)
             drop.connect("enter", self.on_drop_enter)
+            # "motion" must keep returning COPY on every pointer move:
+            # without it Windows gets DROPEFFECT_NONE mid-drag and hides
+            # the drag cursor/icon while hovering the window.
+            drop.connect("motion", self.on_drop_motion)
             drop.connect("leave", self.on_drop_leave)
             self.add_controller(drop)
 
@@ -372,6 +377,8 @@ def run_gui() -> int:
             )
 
             threading.Thread(target=self._worker, daemon=True).start()
+            if initial:  # files passed on the command line (e.g. double-click)
+                self._jobs.put([str(p) for p in initial])
 
         # --- signal handlers ----------------------------------------------
         def on_overwrite_toggled(self, check):
@@ -379,6 +386,9 @@ def run_gui() -> int:
 
         def on_drop_enter(self, _t, _x, _y):
             self.dropzone.add_css_class("hover")
+            return Gdk.DragAction.COPY
+
+        def on_drop_motion(self, _t, _x, _y):
             return Gdk.DragAction.COPY
 
         def on_drop_leave(self, _t):
@@ -508,11 +518,9 @@ def run_gui() -> int:
                                       valign=Gtk.Align.CENTER,
                                       tooltip_text="Apri la cartella")
                 open_btn.add_css_class("flat")
-                folder_uri = dest.resolve().parent.as_uri()
                 open_btn.connect(
                     "clicked",
-                    lambda _b, uri=folder_uri:
-                        Gio.AppInfo.launch_default_for_uri(uri, None))
+                    lambda _b, p=dest.resolve(): self._reveal(p))
                 box.append(open_btn)
             row.set_child(box)
             self.listbox.append(row)
@@ -524,12 +532,35 @@ def run_gui() -> int:
             self.summary.set_label(text)
             return False
 
+        def _reveal(self, dest):
+            """Show the extracted file in the platform file manager.
+
+            Gio.AppInfo.launch_default_for_uri silently fails for file://
+            URIs on Windows, hence the per-platform paths.
+            """
+            if sys.platform == "win32":
+                try:
+                    subprocess.Popen(["explorer", f"/select,{dest}"])
+                except OSError:
+                    os.startfile(dest.parent)
+            elif has_filedialog:  # GTK >= 4.10
+                launcher = Gtk.FileLauncher.new(
+                    Gio.File.new_for_path(str(dest)))
+                launcher.open_containing_folder(self, None, None)
+            else:
+                Gio.AppInfo.launch_default_for_uri(
+                    dest.parent.as_uri(), None)
+
     class App(Gtk.Application):
+        # NON_UNIQUE: every launch (e.g. double-clicking a .p7m when the
+        # file association is installed) gets its own window and processes
+        # its own arguments, with no primary-instance forwarding involved.
         def __init__(self):
-            super().__init__(application_id=APP_ID)
+            super().__init__(application_id=APP_ID,
+                             flags=Gio.ApplicationFlags.NON_UNIQUE)
 
         def do_activate(self):
-            win = self.get_active_window() or Window(self)
+            win = self.get_active_window() or Window(self, initial_paths)
             win.present()
 
     return App().run(None)
@@ -564,7 +595,7 @@ def main() -> int:
 
     if args.paths and not args.gui:
         return run_cli(args.paths, args.overwrite)
-    return run_gui()
+    return run_gui(args.paths)
 
 
 if __name__ == "__main__":
