@@ -358,7 +358,13 @@ def run_gui() -> int:
             self.add_controller(drop)
 
             css = Gtk.CssProvider()
-            css.load_from_data(_CSS)
+            try:  # GTK >= 4.12
+                css.load_from_string(_CSS.decode())
+            except AttributeError:  # older GTK 4, PyGObject signature varies
+                try:
+                    css.load_from_data(_CSS)
+                except TypeError:
+                    css.load_from_data(_CSS, len(_CSS))
             Gtk.StyleContext.add_provider_for_display(
                 Gdk.Display.get_default(), css,
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
