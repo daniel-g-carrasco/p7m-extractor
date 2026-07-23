@@ -1,6 +1,6 @@
 # P7M Extractor
 
-[![Build](https://github.com/TheErasedChild/p7m-extractor/actions/workflows/build.yml/badge.svg)](https://github.com/TheErasedChild/p7m-extractor/actions/workflows/build.yml)
+[![Build](https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml/badge.svg)](https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml)
 
 Extract the original document (PDF, XML, …) from CAdES **`.p7m`** digitally
 signed files — the format used across Italy for signed drawings, contracts,
@@ -19,7 +19,7 @@ codificati base64/PEM.
 ## Download
 
 Grab the portable build from the
-[**Releases**](https://github.com/TheErasedChild/p7m-extractor/releases) page:
+[**Releases**](https://github.com/daniel-g-carrasco/p7m-extractor/releases) page:
 
 | Platform | File | Run |
 |---|---|---|
