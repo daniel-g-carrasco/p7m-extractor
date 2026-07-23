@@ -1,10 +1,24 @@
-# P7M Extractor
+<p align="center">
+  <img src="assets/icon.png" alt="P7M Extractor" width="128" height="128">
+</p>
 
-[![Build](https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml/badge.svg)](https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml)
+<h1 align="center">P7M Extractor</h1>
 
-Extract the original document (PDF, XML, …) from CAdES **`.p7m`** digitally
-signed files — the format used across Italy for signed drawings, contracts,
-PEC attachments and electronic invoices (Fattura Elettronica).
+<p align="center">
+  Extract the original document from CAdES <code>.p7m</code> digitally signed files.
+</p>
+
+<p align="center">
+  <a href="https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml">
+    <img src="https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml/badge.svg" alt="Build">
+  </a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
+The `.p7m` format is used across Italy for signed drawings, contracts,
+PEC attachments and electronic invoices (Fattura Elettronica). It wraps the
+original document (PDF, XML, …) in a PKCS#7/CMS signature envelope; this tool
+unwraps it.
 
 Drag & drop GUI (GTK 4) + CLI, installable or portable on **Windows**,
 portable on **Linux**, zero runtime dependencies: the PKCS#7/CMS envelope is
