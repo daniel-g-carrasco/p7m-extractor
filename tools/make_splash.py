@@ -21,10 +21,11 @@ from make_icon import render_master  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 K = 1.5                      # render scale; text_pos in the spec follows it
 W, H = int(400 * K), int(150 * K)
-BG = (250, 250, 250, 255)
-BORDER = (200, 200, 205, 255)
-TITLE = (36, 31, 49, 255)
-SUBTITLE = (94, 92, 100, 255)
+# GTK "Default" theme (light) palette, so the splash matches the app window
+BG = (246, 245, 244, 255)        # window background, #f6f5f4
+BORDER = (205, 199, 194, 255)    # borders, #cdc7c2
+TITLE = (46, 52, 54, 255)        # foreground, #2e3436
+SUBTITLE = (136, 139, 140, 255)  # dim label (fg at 55% over bg)
 
 
 def px(v: float) -> int:

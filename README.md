@@ -85,6 +85,8 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 - **BER streaming** (indefinite-length, chunked content) fully supported —
   the encoding used by common Italian signing tools
 - Output is written next to the source file, never modifying the original
+- **Light / dark theme** following the system (Windows personalization
+  setting, freedesktop settings portal on Linux), or forced from *Preferenze*
 - UI language is Italian (the `.p7m` format is, after all, an Italian affair)
 
 ### Windows integration
@@ -104,6 +106,10 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
   new installer and launch it; the portable build is sent to the release page.
 - Everything above is per-user (`HKEY_CURRENT_USER`), also for the portable
   build; *Preferenze* → *Rimuovi* takes it all away, as does the uninstaller.
+- **Native window decorations** by default: the system title bar (dark when
+  the theme is dark) handles moving, snapping and restoring from maximized,
+  which GTK's own decorations get wrong on Windows. *Preferenze* switches
+  back to GTK's header bar.
 
 ### Linux
 

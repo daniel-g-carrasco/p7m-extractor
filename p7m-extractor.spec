@@ -76,7 +76,7 @@ if WIN:
             datas=a.datas,
             text_pos=(210, 183),
             text_size=10,
-            text_color='#5e5c64',
+            text_color='#888b8c',  # dim label on the GTK Default light palette
             text_default='Avvio in corso…',
             minify_script=True,
             always_on_top=True,

@@ -253,9 +253,11 @@ class Settings:
     """Tiny persistent key/value store (settings.ini). No file means defaults."""
 
     DEFAULTS = {
-        "ask_default_app": "true",   # Windows: offer to become the .p7m handler
-        "check_updates": "true",     # Windows: look for a new release daily
-        "last_update_check": "",     # ISO date of the last automatic check
+        "ask_default_app": "true",     # Windows: offer to become the .p7m handler
+        "check_updates": "true",       # Windows: look for a new release daily
+        "last_update_check": "",       # ISO date of the last automatic check
+        "color_scheme": "auto",        # auto (follow the system) | light | dark
+        "native_decorations": "true",  # Windows: system title bar instead of GTK's
     }
 
     def __init__(self, path: Path | None = None):
@@ -603,6 +605,32 @@ def win_make_default() -> str:
     return "settings"
 
 
+def win_dark_titlebars(dark: bool) -> None:
+    """Ask DWM to paint the native title bars of this process dark or light
+    (Windows 10 1809+; silently ignored elsewhere)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32, dwmapi = ctypes.windll.user32, ctypes.windll.dwmapi
+    except (AttributeError, OSError):
+        return
+    pid = os.getpid()
+    value = ctypes.c_int(1 if dark else 0)
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _lparam):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid:
+            for attr in (20, 19):  # DWMWA_USE_IMMERSIVE_DARK_MODE (20H1+ / 1809)
+                if dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(value),
+                                                ctypes.sizeof(value)) == 0:
+                    break
+        return 1
+
+    user32.EnumWindows(visit, 0)
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -687,6 +715,15 @@ _CSS = b"""
 
 
 def run_gui(argv) -> int:
+    settings = Settings()
+    is_win = sys.platform == "win32"
+    # Native Windows decorations (system title bar): GTK honours GTK_CSD only
+    # before it initialises, hence the environment variable set up front.
+    use_csd = not (is_win and settings.get_bool("native_decorations"))
+    if not use_csd:
+        os.environ["GTK_CSD"] = "0"
+    theme = None  # ThemeManager, created once GTK is up (App.do_startup)
+
     try:
         import gi
         gi.require_version("Gtk", "4.0")
@@ -711,7 +748,6 @@ def run_gui(argv) -> int:
     import threading
 
     has_filedialog = Gtk.check_version(4, 10, 0) is None
-    is_win = sys.platform == "win32"
     in_flatpak = not is_win and Path("/.flatpak-info").is_file()
 
     # --- small helpers ----------------------------------------------------
@@ -733,16 +769,14 @@ def run_gui(argv) -> int:
         ctl.connect("key-pressed", on_key)
         window.add_controller(ctl)
 
-    def dialog_window(parent, title, width=440):
-        """Modal secondary window with the usual header bar (GNOME HIG)."""
-        win = Gtk.Window(transient_for=parent, modal=True, title=title,
-                         resizable=False, default_width=width)
-        win.set_titlebar(Gtk.HeaderBar())
+    def init_dialog(win):
+        """Common set-up of secondary windows: GTK header bar when using
+        client-side decorations, Escape closes, native title bar follows the
+        colour scheme on Windows."""
+        if use_csd:
+            win.set_titlebar(Gtk.HeaderBar())
         close_on_escape(win)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        set_margins(box, 24)
-        win.set_child(box)
-        return win, box
+        theme.watch_window(win)
 
     def button_row(*buttons):
         row = Gtk.Box(spacing=8, halign=Gtk.Align.END)
@@ -801,6 +835,91 @@ def run_gui(argv) -> int:
             out.append(str(real) if real.exists() and os.access(target_dir, os.W_OK) else p)
         return out
 
+    # --- colour scheme ----------------------------------------------------
+
+    class ThemeManager:
+        """Light/dark colour scheme: explicit, or automatic following the
+        system (Windows personalization key / freedesktop settings portal).
+        Plain GTK 4 does not track the system preference by itself."""
+
+        def __init__(self):
+            self.dark = False
+            self._portal = None
+            self._poll_id = 0
+            self.apply()
+
+        def apply(self):
+            mode = settings.get("color_scheme")
+            if mode == "dark":
+                dark = True
+            elif mode == "light":
+                dark = False
+            else:
+                dark = self._system_prefers_dark()
+            self._set_dark(dark)
+            if is_win:  # Windows gives no change notification here: poll cheaply
+                if mode == "auto" and not self._poll_id:
+                    self._poll_id = GLib.timeout_add_seconds(3, self._poll)
+                elif mode != "auto" and self._poll_id:
+                    GLib.source_remove(self._poll_id)
+                    self._poll_id = 0
+
+        def _poll(self):
+            dark = self._system_prefers_dark()
+            if dark != self.dark:
+                self._set_dark(dark)
+            return True  # keep polling
+
+        def _set_dark(self, dark):
+            self.dark = bool(dark)
+            gtk_settings = Gtk.Settings.get_default()
+            if gtk_settings is not None:
+                gtk_settings.set_property("gtk-application-prefer-dark-theme", self.dark)
+            if is_win:
+                win_dark_titlebars(self.dark)
+
+        def watch_window(self, win):
+            """Paint the native title bar of a new window in the right shade."""
+            if is_win:
+                win.connect("map", lambda *_: win_dark_titlebars(self.dark))
+
+        def _system_prefers_dark(self):
+            if is_win:
+                import winreg
+                try:
+                    with winreg.OpenKey(
+                            winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as k:
+                        return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+                except OSError:
+                    return False
+            # org.freedesktop.portal.Settings works inside and outside Flatpak
+            try:
+                if self._portal is None:
+                    self._portal = Gio.DBusProxy.new_for_bus_sync(
+                        Gio.BusType.SESSION, Gio.DBusProxyFlags.NONE, None,
+                        "org.freedesktop.portal.Desktop",
+                        "/org/freedesktop/portal/desktop",
+                        "org.freedesktop.portal.Settings", None)
+                    self._portal.connect("g-signal", self._on_portal_signal)
+                reply = self._portal.call_sync(
+                    "Read",
+                    GLib.Variant("(ss)", ("org.freedesktop.appearance", "color-scheme")),
+                    Gio.DBusCallFlags.NONE, 1000, None)
+                value = reply.unpack()[0]
+                while isinstance(value, GLib.Variant):
+                    value = value.unpack()
+                return int(value) == 1  # 0 no preference, 1 dark, 2 light
+            except (GLib.Error, TypeError, ValueError):
+                return False
+
+        def _on_portal_signal(self, _proxy, _sender, signal, params):
+            if signal != "SettingChanged" or settings.get("color_scheme") != "auto":
+                return
+            namespace, key = params.unpack()[:2]
+            if (namespace, key) == ("org.freedesktop.appearance", "color-scheme"):
+                self.apply()
+
     # --- main window ------------------------------------------------------
 
     class Window(Gtk.ApplicationWindow):
@@ -819,16 +938,20 @@ def run_gui(argv) -> int:
             self._about = None
 
             header = Gtk.HeaderBar()
-            self.set_titlebar(header)
+            if use_csd:
+                self.set_titlebar(header)
+            else:  # native title bar: the header bar becomes a plain toolbar
+                header.set_show_title_buttons(False)
+                header.set_title_widget(Gtk.Box())
 
             menu = Gio.Menu()
             if is_win:
                 section = Gio.Menu()
                 section.append("Controlla aggiornamenti…", "app.check-updates")
                 menu.append_section(None, section)
-                section = Gio.Menu()
-                section.append("Preferenze", "app.preferences")
-                menu.append_section(None, section)
+            section = Gio.Menu()
+            section.append("Preferenze", "app.preferences")
+            menu.append_section(None, section)
             section = Gio.Menu()
             section.append(f"Informazioni su {APP_NAME}", "app.about")
             menu.append_section(None, section)
@@ -838,9 +961,14 @@ def run_gui(argv) -> int:
             self.spinner = Gtk.Spinner(tooltip_text="Estrazione in corso…")
             header.pack_end(self.spinner)
 
+            root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            if not use_csd:
+                root.append(header)
             content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             set_margins(content, 16)
-            self.set_child(content)
+            root.append(content)
+            self.set_child(root)
+            theme.watch_window(self)
 
             # --- in-app notification banner ---------------------------------
             self.banner = Gtk.Revealer(
@@ -1179,8 +1307,7 @@ def run_gui(argv) -> int:
         def __init__(self, parent):
             super().__init__(transient_for=parent, modal=True, resizable=False,
                              title="App predefinita", default_width=440)
-            self.set_titlebar(Gtk.HeaderBar())
-            close_on_escape(self)
+            init_dialog(self)
             self._parent = parent
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             set_margins(box, 24)
@@ -1233,8 +1360,7 @@ def run_gui(argv) -> int:
         def __init__(self, parent, rel):
             super().__init__(transient_for=parent, modal=True, resizable=False,
                              title="Aggiornamento disponibile", default_width=480)
-            self.set_titlebar(Gtk.HeaderBar())
-            close_on_escape(self)
+            init_dialog(self)
             self._app = parent.get_application()
             self._rel = rel
             self._cancel = threading.Event()
@@ -1336,50 +1462,74 @@ def run_gui(argv) -> int:
     # --- preferences (Windows) ----------------------------------------------
 
     class PreferencesWindow(Gtk.Window):
+        SCHEMES = (("auto", "Automatico (segue il sistema)"),
+                   ("light", "Chiaro"), ("dark", "Scuro"))
+
         def __init__(self, parent):
             super().__init__(transient_for=parent, modal=True, resizable=False,
                              title="Preferenze", default_width=540)
-            self.set_titlebar(Gtk.HeaderBar())
-            close_on_escape(self)
+            init_dialog(self)
             self._parent = parent
-            s = parent.settings
+            self.handler_label = None
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             set_margins(box, 24)
 
-            box.append(self._section("Generale"))
-            general = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-            general.append(self._row(
-                "Chiedi di impostare come app predefinita all'avvio",
-                f"Solo finché {APP_NAME} non è già l'app che apre i file .p7m",
-                self._switch(s, "ask_default_app")))
-            general.append(self._row(
-                "Controlla aggiornamenti all'avvio",
-                "Una volta al giorno, dalle Release del progetto su GitHub",
-                self._switch(s, "check_updates")))
-            box.append(Gtk.Frame(child=general))
+            box.append(self._section("Aspetto"))
+            look = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+            keys = [k for k, _label in self.SCHEMES]
+            scheme = Gtk.DropDown.new_from_strings([label for _k, label in self.SCHEMES])
+            scheme.set_valign(Gtk.Align.CENTER)
+            current = settings.get("color_scheme")
+            scheme.set_selected(keys.index(current) if current in keys else 0)
+            scheme.connect("notify::selected", self._on_scheme)
+            look.append(self._row(
+                "Tema", "«Automatico» segue le impostazioni di sistema", scheme))
+            if is_win:
+                look.append(self._row(
+                    "Decorazioni native di Windows",
+                    "Barra del titolo di sistema al posto di quella GTK "
+                    "(ha effetto al prossimo avvio)",
+                    self._switch("native_decorations")))
+            box.append(Gtk.Frame(child=look))
 
-            box.append(self._section("Esplora file"))
-            shell = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-            self.handler_label = None
-            set_btn = Gtk.Button(label="Imposta…", valign=Gtk.Align.CENTER)
-            set_btn.connect("clicked", self._on_set_default)
-            row, self.handler_label = self._row(
-                "App predefinita per i file .p7m", self._handler_text(), set_btn,
-                return_subtitle=True)
-            shell.append(row)
-            reg = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
-            b_reg = Gtk.Button(label="Registra")
-            b_reg.connect("clicked", self._on_register)
-            b_unreg = Gtk.Button(label="Rimuovi")
-            b_unreg.connect("clicked", self._on_unregister)
-            reg.append(b_reg)
-            reg.append(b_unreg)
-            shell.append(self._row(
-                "Menu contestuale e «Apri con»",
-                "Voce «Estrai il contenuto» sui file .p7m e presenza "
-                "nell'elenco delle app (utente corrente)", reg))
-            box.append(Gtk.Frame(child=shell))
+            if is_win:
+                box.append(self._section("Generale"))
+                general = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+                general.append(self._row(
+                    "Chiedi di impostare come app predefinita all'avvio",
+                    f"Solo finché {APP_NAME} non è già l'app che apre i file .p7m",
+                    self._switch("ask_default_app")))
+                general.append(self._row(
+                    "Controlla aggiornamenti all'avvio",
+                    "Una volta al giorno, dalle Release del progetto su GitHub",
+                    self._switch("check_updates")))
+                box.append(Gtk.Frame(child=general))
+
+                box.append(self._section("Esplora file"))
+                shell = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+                set_btn = Gtk.Button(label="Imposta…", valign=Gtk.Align.CENTER)
+                set_btn.connect("clicked", self._on_set_default)
+                row, self.handler_label = self._row(
+                    "App predefinita per i file .p7m", self._handler_text(), set_btn,
+                    return_subtitle=True)
+                shell.append(row)
+                reg = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
+                b_reg = Gtk.Button(label="Registra")
+                b_reg.connect("clicked", self._on_register)
+                b_unreg = Gtk.Button(label="Rimuovi")
+                b_unreg.connect("clicked", self._on_unregister)
+                reg.append(b_reg)
+                reg.append(b_unreg)
+                shell.append(self._row(
+                    "Menu contestuale e «Apri con»",
+                    "Voce «Estrai il contenuto» sui file .p7m e presenza "
+                    "nell'elenco delle app (utente corrente)", reg))
+                box.append(Gtk.Frame(child=shell))
             self.set_child(box)
+
+        def _on_scheme(self, drop, _pspec):
+            settings.set("color_scheme", self.SCHEMES[drop.get_selected()][0])
+            theme.apply()
 
         @staticmethod
         def _section(text):
@@ -1389,9 +1539,10 @@ def run_gui(argv) -> int:
             return lbl
 
         @staticmethod
-        def _switch(settings, key):
+        def _switch(key):
             sw = Gtk.Switch(active=settings.get_bool(key), valign=Gtk.Align.CENTER)
-            sw.connect("state-set", lambda _s, state: (settings.set(key, bool(state)), False)[1])
+            sw.connect("state-set",
+                       lambda _s, state: (settings.set(key, bool(state)), False)[1])
             return sw
 
         @staticmethod
@@ -1462,10 +1613,11 @@ def run_gui(argv) -> int:
         def __init__(self):
             super().__init__(application_id=APP_ID,
                              flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
-            self.settings = Settings()
+            self.settings = settings
             self.window = None
 
         def do_startup(self):
+            nonlocal theme
             Gtk.Application.do_startup(self)
             display = Gdk.Display.get_default()
             bundle = getattr(sys, "_MEIPASS", None)
@@ -1484,6 +1636,7 @@ def run_gui(argv) -> int:
                     css.load_from_data(_CSS, len(_CSS))
             Gtk.StyleContext.add_provider_for_display(
                 display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            theme = ThemeManager()
 
             self._action("quit", lambda *_: self.quit(), ["<Control>q"])
             self._action("about", lambda *_: self._win().show_about())
@@ -1491,12 +1644,12 @@ def run_gui(argv) -> int:
                          ["<Control>o"])
             self._action("open-folder", lambda *_: self._win().on_pick_folder(),
                          ["<Control><Shift>o"])
+            self._action("preferences",
+                         lambda *_: PreferencesWindow(self._win()).present(),
+                         ["<Control>comma"])
             if is_win:
                 self._action("check-updates",
                              lambda *_: self._win().check_updates(manual=True))
-                self._action("preferences",
-                             lambda *_: PreferencesWindow(self._win()).present(),
-                             ["<Control>comma"])
 
         def _action(self, name, callback, accels=()):
             action = Gio.SimpleAction.new(name, None)
