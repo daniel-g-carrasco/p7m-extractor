@@ -8,3 +8,4 @@ venv/
 *.tar.gz
 sample.p7m
 sample
+locale/

@@ -151,6 +151,27 @@ def main() -> int:
     ns, unknown = px.build_parser().parse_known_args(["--gui", "a.p7m", "--future-flag"])
     assert ns.gui and ns.paths == ["a.p7m"] and unknown == ["--future-flag"]
 
+    # --- translations: po -> mo compiler and gettext plumbing ----------------
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+    import compile_po  # noqa: E402
+    root = Path(compile_po.ROOT)
+    with tempfile.TemporaryDirectory() as td:
+        written = compile_po.compile_all(root / "po", Path(td))
+        assert [lang for lang, _count, _out in written] == ["it"]
+        import gettext
+        it = gettext.translation(px.TEXTDOMAIN, td, languages=["it"])
+        assert it.gettext("Queued") == "In coda"
+        assert it.gettext("Extracting… {percent}%") == "Estrazione in corso… {percent}%"
+        assert it.gettext("not a translated string") == "not a translated string"
+    # every msgid in the catalogue must exist in the source (adjacent string
+    # literals split over lines are joined first)
+    import re
+    source = re.sub(r'"\s*\n\s*"', "", (root / "p7m_extractor.py").read_text(encoding="utf-8"))
+    entries = compile_po.parse_po(root / "po" / "it.po")
+    missing = [m for m in entries if m and m not in source]
+    assert not missing, f"msgids not found in the source: {missing[:5]}"
+    assert px.detect_language() in px.LANGUAGES
+
     print("all tests passed")
     return 0
 

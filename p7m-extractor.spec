@@ -15,6 +15,14 @@ ICON = 'assets/icon.ico' if WIN else None
 datas = [('data/icons', 'share/icons')]
 binaries = []
 
+# Translations, compiled from po/ by `python tools/compile_po.py` (CI does it
+# before running PyInstaller).
+LOCALE_DIR = os.path.join(SPECPATH, 'locale')
+if os.path.isdir(LOCALE_DIR):
+    datas.append((LOCALE_DIR, 'share/locale'))
+else:
+    print('WARNING: locale/ missing: run tools/compile_po.py first (UI will be English only)')
+
 if WIN:
     prefix = Path(sys.prefix)  # MSYS2: C:/msys64/mingw64
 

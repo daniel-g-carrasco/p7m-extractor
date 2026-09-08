@@ -50,8 +50,10 @@ jobs:
             mingw-w64-x86_64-pyinstaller
             mingw-w64-x86_64-ca-certificates
       - name: Build with PyInstaller
-        run: pyinstaller --noconfirm p7m-extractor.spec
-      - name: Verify GTK 4, gdbus and the CA bundle are in the bundle
+        run: |
+          python tools/compile_po.py
+          pyinstaller --noconfirm p7m-extractor.spec
+      - name: Verify GTK 4, gdbus, CA bundle, icons and translations are in the bundle
         run: |
           I=dist/p7m-extractor/_internal
           test -f "$I/gi_typelibs/Gtk-4.0.typelib"
@@ -59,6 +61,7 @@ jobs:
           test -f "$I/gdbus.exe"          # single-instance support (GApplication)
           test -f "$I/certs/ca-bundle.crt" # TLS for the update check
           test -f "$I/share/icons/hicolor/scalable/apps/com.danielgrasso.P7mExtractor.svg"
+          test -f "$I/share/locale/it/LC_MESSAGES/p7m-extractor.mo"
       - name: Ensure GLib schemas and icon themes are bundled
         run: |
           APPDIR=dist/p7m-extractor/_internal
@@ -70,12 +73,15 @@ jobs:
           # -n: merge without overwriting the app icons already placed by the spec
           cp -rn /mingw64/share/icons/Adwaita "$APPDIR/share/icons/" || true
           cp -rn /mingw64/share/icons/hicolor "$APPDIR/share/icons/" || true
-      - name: Slim the bundle (locales, icon variants and caches the app never loads)
+      - name: Slim the bundle (locales and icon variants the app never loads)
         run: |
           I=dist/p7m-extractor/_internal
           [ -d "$I/share/locale" ] && find "$I/share/locale" -mindepth 1 -maxdepth 1 ! -name it ! -name 'en*' -exec rm -rf {} + || true
           rm -rf "$I/share/icons/AdwaitaLegacy" "$I/share/icons/Adwaita/cursors"
-          rm -f "$I/share/icons/Adwaita/icon-theme.cache" "$I/share/icons/hicolor/icon-theme.cache"
+          # fresh icon caches for the slimmed themes: without them GTK scans
+          # thousands of icon files at start-up
+          gtk4-update-icon-cache -q -t -f "$I/share/icons/Adwaita"
+          gtk4-update-icon-cache -q -t -f "$I/share/icons/hicolor"
           du -sm "$I" | cut -f1 | xargs -I{} echo "bundle after slimming: {} MB"
       - name: Smoke test (CLI through the bundled exe)
         run: |
@@ -119,21 +125,24 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
-            libgtk-4-1 python3-venv binutils
+            libgtk-4-1 libgtk-4-bin python3-venv binutils
       - name: Build with PyInstaller
         run: |
+          python3 tools/compile_po.py
           python3 -m venv --system-site-packages .venv
           .venv/bin/pip install pyinstaller
           .venv/bin/pyinstaller --noconfirm p7m-extractor.spec
-      - name: Verify GTK 4 is in the bundle
+      - name: Verify GTK 4 and the translations are in the bundle
         run: |
           test -f dist/p7m-extractor/_internal/gi_typelibs/Gtk-4.0.typelib
           ls dist/p7m-extractor/_internal/libgtk-4*.so*
+          test -f dist/p7m-extractor/_internal/share/locale/it/LC_MESSAGES/p7m-extractor.mo
       - name: Slim the bundle (locales and icon variants the app never loads)
         run: |
           I=dist/p7m-extractor/_internal
           [ -d "$I/share/locale" ] && find "$I/share/locale" -mindepth 1 -maxdepth 1 ! -name it ! -name 'en*' -exec rm -rf {} + || true
-          rm -rf "$I/share/icons/AdwaitaLegacy" "$I/share/icons/Adwaita/cursors" "$I/share/icons/Adwaita/icon-theme.cache"
+          rm -rf "$I/share/icons/AdwaitaLegacy" "$I/share/icons/Adwaita/cursors"
+          [ -d "$I/share/icons/Adwaita" ] && gtk4-update-icon-cache -q -t -f "$I/share/icons/Adwaita" || true
           du -sm "$I" | cut -f1 | xargs -I{} echo "bundle after slimming: {} MB"
       - name: Smoke test (CLI through the bundled binary)
         run: |

@@ -3,6 +3,8 @@
 
   assets/icon.ico, assets/icon.png            Windows exe / installer icon
   data/icons/hicolor/<N>x<N>/apps/<APP_ID>.png icon-theme PNGs (64, 128, 256)
+  installer/wizard-small-<dpi>.bmp             Inno Setup wizard header image
+  installer/wizard-large-<dpi>.bmp             Inno Setup finish-page image
 
 Drawn at high resolution and downscaled, so every size stays crisp.
 Design: white document with a folded corner on a blue rounded tile,
@@ -90,6 +92,24 @@ def main() -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         img.resize((size, size), Image.LANCZOS).save(dest)
         print(f"written: {dest.relative_to(ROOT)}")
+
+    # Inno Setup wizard bitmaps (24-bit BMP, white background), one per DPI
+    # scale; the sizes are the ones documented for WizardSmallImageFile and
+    # WizardImageFile. Setup picks the closest match at run time.
+    small = {100: (55, 58), 125: (64, 68), 150: (83, 80), 175: (92, 97),
+             200: (110, 106), 225: (119, 123), 250: (138, 140)}
+    large = {100: (164, 314), 125: (192, 386), 150: (246, 459), 175: (273, 556),
+             200: (328, 604), 225: (355, 700), 250: (410, 797)}
+    for kind, sizes in (("small", small), ("large", large)):
+        for dpi, (w, h) in sizes.items():
+            canvas = Image.new("RGBA", (w, h), WHITE)
+            side = min(w, h) - 6 if kind == "small" else int(w * 0.62)
+            icon = img.resize((side, side), Image.LANCZOS)
+            y = (h - side) // 2 if kind == "small" else int(h * 0.18)
+            canvas.alpha_composite(icon, ((w - side) // 2, y))
+            dest = ROOT / "installer" / f"wizard-{kind}-{dpi}.bmp"
+            canvas.convert("RGB").save(dest, format="BMP")
+        print(f"written: installer/wizard-{kind}-<dpi>.bmp ({len(sizes)} sizes)")
 
 
 if __name__ == "__main__":

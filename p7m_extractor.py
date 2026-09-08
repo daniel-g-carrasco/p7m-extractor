@@ -17,16 +17,13 @@ import argparse
 import base64
 import binascii
 import configparser
+import gettext
 import itertools
-import json
 import os
 import re
 import subprocess
 import sys
-import tempfile
 import time
-import urllib.error
-import urllib.request
 from datetime import date
 from pathlib import Path
 
@@ -37,11 +34,76 @@ APP_NAME = "P7M Extractor"
 GITHUB_REPO = "daniel-g-carrasco/p7m-extractor"
 RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+TEXTDOMAIN = "p7m-extractor"
 
 # Windows shell integration identifiers (see the "Windows" section below and
 # installer/p7m-extractor.iss, which must stay in sync with these).
 PROGID = "P7MExtractor.p7m"
 WIN_VERB = "P7MExtractor.extract"
+
+_ = gettext.NullTranslations().gettext  # rebound by setup_i18n()
+
+
+def _mark(label: str) -> None:
+    """Start-up profiling aid: append a timestamp to $P7M_STARTUP_LOG."""
+    path = os.environ.get("P7M_STARTUP_LOG")
+    if path:
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"{time.time():.3f} {label}\n")
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Localisation (GNU gettext; catalogues in po/, compiled by tools/compile_po.py)
+# ---------------------------------------------------------------------------
+
+LANGUAGES = ("en", "it")
+
+
+def _locale_dirs():
+    base = Path(getattr(sys, "_MEIPASS", None) or Path(__file__).resolve().parent)
+    yield base / "share" / "locale"   # PyInstaller bundle
+    yield base / "locale"             # source checkout, after tools/compile_po.py
+    for prefix in ("/app", "/usr/local", "/usr"):
+        yield Path(prefix) / "share" / "locale"
+
+
+def detect_language() -> str:
+    """Language of the user's desktop: the Windows display language, or the
+    usual environment variables elsewhere. English when in doubt."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            langid = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF
+            return "it" if langid == 0x10 else "en"
+        except (AttributeError, OSError):
+            return "en"
+    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(var)
+        if value:
+            return "it" if value.split(":")[0].lower().startswith("it") else "en"
+    return "en"
+
+
+def setup_i18n(choice: str = "auto") -> str:
+    """Install the translation for `choice` ("auto", "it" or "en") and return
+    the language in use. Must run before any user-visible string is built."""
+    global _
+    lang = choice if choice in LANGUAGES else detect_language()
+    if sys.platform == "win32" or choice in LANGUAGES:
+        # GTK's own strings (dialog buttons, file chooser) come from libintl,
+        # which honours LANGUAGE: keep them in step with ours.
+        os.environ["LANGUAGE"] = lang
+    translation = gettext.NullTranslations()
+    for directory in _locale_dirs():
+        if gettext.find(TEXTDOMAIN, str(directory), languages=[lang]):
+            translation = gettext.translation(TEXTDOMAIN, str(directory), languages=[lang])
+            break
+    _ = translation.gettext
+    return lang
+
 
 # ---------------------------------------------------------------------------
 # BER/DER parsing (pure stdlib)
@@ -124,7 +186,7 @@ def _collect_octets(data: bytes, start: int, end: int, out: list) -> None:
 def extract_econtent(der: bytes) -> bytes:
     """Return the encapsulated content of a BER/DER PKCS#7 SignedData blob."""
     try:
-        tag, cons, cs, ce, _ = _node(der, 0)
+        tag, cons, cs, ce, _next = _node(der, 0)
         if tag != 0x30 or not cons:
             raise BerError("not a PKCS#7/CMS structure")
         kids = list(_children(der, cs, ce))
@@ -278,11 +340,12 @@ class Settings:
     """Tiny persistent key/value store (settings.ini). No file means defaults."""
 
     DEFAULTS = {
+        "language": "auto",            # auto (desktop language) | it | en
+        "color_scheme": "auto",        # auto (follow the system) | light | dark
+        "native_decorations": "true",  # Windows: system title bar instead of GTK's
         "ask_default_app": "true",     # Windows: offer to become the .p7m handler
         "check_updates": "true",       # Windows: look for a new release daily
         "last_update_check": "",       # ISO date of the last automatic check
-        "color_scheme": "auto",        # auto (follow the system) | light | dark
-        "native_decorations": "true",  # Windows: system title bar instead of GTK's
     }
 
     def __init__(self, path: Path | None = None):
@@ -383,6 +446,7 @@ def _ssl_context():
 
 
 def _http_get(url: str, timeout: float = 15.0):
+    import urllib.request
     req = urllib.request.Request(url, headers={
         "User-Agent": f"p7m-extractor/{__version__}",
         "Accept": "application/vnd.github+json",
@@ -392,16 +456,19 @@ def _http_get(url: str, timeout: float = 15.0):
 
 def fetch_latest_release(timeout: float = 15.0) -> dict:
     """Return {"version", "tag", "url", "notes", "assets": [{"name", "url", "size"}]}."""
+    import json
+    import urllib.error
     try:
         with _http_get(LATEST_RELEASE_API, timeout) as resp:
             data = json.load(resp)
     except urllib.error.HTTPError as e:
-        raise UpdateError(f"GitHub ha risposto {e.code}", reached=True) from None
+        raise UpdateError(_("GitHub answered {code}").format(code=e.code),
+                          reached=True) from None
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise UpdateError(str(getattr(e, "reason", e))) from None
     tag = str(data.get("tag_name") or "")
     if not tag:
-        raise UpdateError("risposta inattesa dal server", reached=True)
+        raise UpdateError(_("unexpected answer from the server"), reached=True)
     return {
         "version": tag.lstrip("vV"),
         "tag": tag,
@@ -418,6 +485,7 @@ def fetch_latest_release(timeout: float = 15.0) -> dict:
 def download_file(url: str, dest: Path, progress=None, cancelled=None) -> Path:
     """Download url to dest. progress(done, total) is called along the way;
     cancelled is an optional threading.Event."""
+    import urllib.error
     dest = Path(dest)
     tmp = dest.with_name(dest.name + ".part")
     try:
@@ -426,7 +494,7 @@ def download_file(url: str, dest: Path, progress=None, cancelled=None) -> Path:
             done = 0
             while True:
                 if cancelled is not None and cancelled.is_set():
-                    raise UpdateError("annullato", reached=True)
+                    raise UpdateError(_("cancelled"), reached=True)
                 chunk = resp.read(256 * 1024)
                 if not chunk:
                     break
@@ -437,7 +505,8 @@ def download_file(url: str, dest: Path, progress=None, cancelled=None) -> Path:
         tmp.replace(dest)
         return dest
     except urllib.error.HTTPError as e:
-        raise UpdateError(f"download fallito ({e.code})", reached=True) from None
+        raise UpdateError(_("download failed ({code})").format(code=e.code),
+                          reached=True) from None
     except (urllib.error.URLError, OSError) as e:
         raise UpdateError(str(getattr(e, "reason", e))) from None
     finally:
@@ -450,16 +519,16 @@ def download_file(url: str, dest: Path, progress=None, cancelled=None) -> Path:
 def run_check_update() -> int:
     """`--check-update`: print the latest release. Exit 0 when GitHub answered
     (up to date or not), 3 when the network/TLS layer failed."""
-    print(f"Versione installata: {__version__}")
+    print(_("Installed version: {version}").format(version=__version__))
     try:
         rel = fetch_latest_release()
     except UpdateError as e:
-        print(f"Controllo aggiornamenti non riuscito: {e}", file=sys.stderr)
+        print(_("Update check failed: {error}").format(error=e), file=sys.stderr)
         return 0 if e.reached else 3
     if is_newer(rel["version"]):
-        print(f"Disponibile: {rel['version']}  ({rel['url']})")
+        print(_("Available: {version}  ({url})").format(version=rel["version"], url=rel["url"]))
     else:
-        print(f"Ultima versione: {rel['version']} (aggiornato)")
+        print(_("Latest version: {version} (up to date)").format(version=rel["version"]))
     return 0
 
 
@@ -523,16 +592,16 @@ def win_register() -> None:
 
     classes = r"Software\Classes"
     # ProgID: what a .p7m is and how to open it
-    put(rf"{classes}\{PROGID}", "Documento firmato digitalmente (P7M)")
+    put(rf"{classes}\{PROGID}", _("Digitally signed document (P7M)"))
     if icon:
         put(rf"{classes}\{PROGID}\DefaultIcon", icon)
-    put(rf"{classes}\{PROGID}\shell\open", "Estrai con P7M Extractor")
+    put(rf"{classes}\{PROGID}\shell\open", _("Extract with P7M Extractor"))
     put(rf"{classes}\{PROGID}\shell\open\command", cmd)
     # offer the ProgID in the "Open with" list for .p7m
     put(rf"{classes}\.p7m\OpenWithProgids", "", PROGID)
     # context-menu verb: shown on every .p7m whatever the default app is
     verb = rf"{classes}\SystemFileAssociations\.p7m\shell\{WIN_VERB}"
-    put(verb, "Estrai il contenuto con P7M Extractor")
+    put(verb, _("Extract content with P7M Extractor"))
     if icon:
         put(verb, icon, "Icon")
     put(verb, "Player", "MultiSelectModel")  # no 15-files prompt on multi-select
@@ -540,7 +609,7 @@ def win_register() -> None:
     # Default Programs registration (Settings > Apps > Default apps)
     caps = rf"Software\{APP_NAME}\Capabilities"
     put(caps, APP_NAME, "ApplicationName")
-    put(caps, "Estrae il documento originale dai file firmati .p7m",
+    put(caps, _("Extracts the original document from signed .p7m files"),
         "ApplicationDescription")
     put(rf"{caps}\FileAssociations", PROGID, ".p7m")
     put(r"Software\RegisteredApplications", caps, APP_NAME)
@@ -703,46 +772,48 @@ def win_dark_titlebars(dark: bool) -> None:
 def run_cli(paths, overwrite: bool) -> int:
     files = iter_p7m(paths)
     if not files:
-        print("Nessun file .p7m trovato.", file=sys.stderr)
+        print(_("No .p7m files found."), file=sys.stderr)
         return 1
     n_ok = n_skip = n_err = 0
     for f in files:
         try:
             dest, layers = extract_file(f, overwrite)
-            extra = f"  ({layers} firme annidate)" if layers > 1 else ""
+            extra = ("  " + _("({n} nested signatures)").format(n=layers)) if layers > 1 else ""
             print(f"OK    {dest}{extra}")
             n_ok += 1
         except FileExistsError as e:
-            print(f"SALTO {f}  (esiste gia': {Path(str(e)).name}; usa --overwrite)")
+            print(_("SKIP  {file}  (already exists: {name}; use --overwrite)").format(
+                file=f, name=Path(str(e)).name))
             n_skip += 1
         except (BerError, OSError) as e:
             print(f"ERR   {f}  ({e})", file=sys.stderr)
             n_err += 1
-    print(f"\nEstratti: {n_ok}  Saltati: {n_skip}  Errori: {n_err}")
+    print("\n" + _("Extracted: {ok}  Skipped: {skipped}  Errors: {errors}").format(
+        ok=n_ok, skipped=n_skip, errors=n_err))
     return 0 if n_err == 0 else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="p7m-extractor",
-        description="Estrae il documento originale dai file firmati .p7m (CAdES).",
-        epilog="Senza argomenti si avvia l'interfaccia grafica (GTK 4). "
-               "Esempi: p7m-extractor fattura.xml.p7m | "
-               "p7m-extractor --overwrite cartella/",
+        description=_("Extract the original document from .p7m (CAdES) signed files."),
+        epilog=_("Without arguments the graphical interface (GTK 4) starts. "
+                 "Examples: p7m-extractor invoice.xml.p7m | "
+                 "p7m-extractor --overwrite folder/"),
     )
-    parser.add_argument("paths", nargs="*", metavar="FILE_O_CARTELLA",
-                        help="file .p7m o cartelle da scansionare (ricorsivo)")
+    parser.add_argument("paths", nargs="*", metavar=_("FILE_OR_FOLDER"),
+                        help=_(".p7m files or folders to scan (recursive)"))
     parser.add_argument("--overwrite", action="store_true",
-                        help="sovrascrivi i file estratti già esistenti")
+                        help=_("overwrite existing extracted files"))
     parser.add_argument("--gui", action="store_true",
-                        help="forza l'avvio dell'interfaccia grafica")
+                        help=_("force the graphical interface"))
     parser.add_argument("--check-update", action="store_true",
-                        help="controlla se esiste una versione più recente ed esci")
+                        help=_("check whether a newer version exists and exit"))
     parser.add_argument("--register", action="store_true",
-                        help="(Windows) registra l'app in Esplora file per "
-                             "l'utente corrente ed esci")
+                        help=_("(Windows) register the app in File Explorer for "
+                               "the current user and exit"))
     parser.add_argument("--unregister", action="store_true",
-                        help="(Windows) rimuovi la registrazione ed esci")
+                        help=_("(Windows) remove the registration and exit"))
     parser.add_argument("--version", action="version",
                         version=f"%(prog)s {__version__}")
     return parser
@@ -769,8 +840,7 @@ _CSS = b"""
 """
 
 
-def run_gui(argv) -> int:
-    settings = Settings()
+def run_gui(argv, settings: Settings) -> int:
     is_win = sys.platform == "win32"
     # Native Windows decorations (system title bar): GTK honours GTK_CSD only
     # before it initialises, hence the environment variable set up front.
@@ -786,17 +856,18 @@ def run_gui(argv) -> int:
         from gi.repository import Gdk, Gio, GLib, Gtk, Pango
     except (ImportError, ValueError):
         print(
-            "GTK 4 / PyGObject non disponibili. Installa:\n"
+            _("GTK 4 / PyGObject not available. Install:") + "\n"
             "  Debian/Ubuntu:  sudo apt install python3-gi gir1.2-gtk-4.0\n"
             "  Fedora:         sudo dnf install python3-gobject gtk4\n"
             "  Arch:           sudo pacman -S python-gobject gtk4\n"
             "  Windows(MSYS2): pacman -S mingw-w64-x86_64-gtk4 "
             "mingw-w64-x86_64-python-gobject\n"
-            "oppure scarica la build portable dalle Release su GitHub.\n"
-            "Uso senza GUI:  p7m-extractor FILE_O_CARTELLA...",
+            + _("or download the portable build from the GitHub Releases.") + "\n"
+            + _("Headless use:  p7m-extractor FILE_OR_FOLDER..."),
             file=sys.stderr,
         )
         return 2
+    _mark("gtk-imported")
 
     import queue
     import threading
@@ -815,7 +886,7 @@ def run_gui(argv) -> int:
     def close_on_escape(window):
         ctl = Gtk.EventControllerKey()
 
-        def on_key(_c, keyval, _code, _state):
+        def on_key(_ctl, keyval, _code, _state):
             if keyval == Gdk.KEY_Escape:
                 window.close()
                 return True
@@ -935,7 +1006,7 @@ def run_gui(argv) -> int:
         def watch_window(self, win):
             """Paint the native title bar of a new window in the right shade."""
             if is_win:
-                win.connect("map", lambda *_: win_dark_titlebars(self.dark))
+                win.connect("map", lambda _w: win_dark_titlebars(self.dark))
 
         def _system_prefers_dark(self):
             if is_win:
@@ -995,7 +1066,7 @@ def run_gui(argv) -> int:
                             valign=Gtk.Align.CENTER)
             name = Gtk.Label(label=src.name, xalign=0.0)
             name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-            self.status = Gtk.Label(label="In coda", xalign=0.0)
+            self.status = Gtk.Label(label=_("Queued"), xalign=0.0)
             self.status.set_ellipsize(Pango.EllipsizeMode.END)
             self.status.add_css_class("dim-label")
             self.bar = Gtk.ProgressBar(visible=False)
@@ -1004,14 +1075,14 @@ def run_gui(argv) -> int:
                 texts.append(w)
             self.open_btn = Gtk.Button(icon_name="folder-open-symbolic",
                                        valign=Gtk.Align.CENTER, visible=False,
-                                       tooltip_text="Apri la cartella")
+                                       tooltip_text=_("Open folder"))
             self.open_btn.add_css_class("flat")
             for w in (self.stack, texts, self.open_btn):
                 box.append(w)
             self.set_child(box)
 
         def start(self):
-            self.status.set_label("Estrazione in corso…")
+            self.status.set_label(_("Extracting…"))
             self.bar.set_fraction(0.0)
             self.bar.set_visible(True)
             self.spinner.start()
@@ -1019,7 +1090,8 @@ def run_gui(argv) -> int:
 
         def progress(self, fraction):
             self.bar.set_fraction(fraction)
-            self.status.set_label(f"Estrazione in corso… {int(fraction * 100)}%")
+            self.status.set_label(_("Extracting… {percent}%").format(
+                percent=int(fraction * 100)))
 
         def finish(self, dest, layers, err):
             """Show the outcome; return the counter to bump (0 ok, 1 skipped, 2 error)."""
@@ -1027,20 +1099,19 @@ def run_gui(argv) -> int:
             self.bar.set_visible(False)
             if err is None:
                 icon_name, cls = "object-select-symbolic", None
-                extra = f" ({layers} firme annidate)" if layers > 1 else ""
-                text, outcome = f"Estratto{extra} → {dest.name}", 0
+                extra = (" " + _("({n} nested signatures)").format(n=layers)) if layers > 1 else ""
+                text, outcome = _("Extracted{extra} → {name}").format(extra=extra, name=dest.name), 0
                 self.dest = dest.absolute()
                 self.set_activatable(True)  # double-click / Enter opens the document
                 self.set_tooltip_text(str(self.dest))
                 self.open_btn.set_visible(True)
-                self.open_btn.connect(
-                    "clicked", lambda _b: self._on_reveal(self.dest))
+                self.open_btn.connect("clicked", lambda _b: self._on_reveal(self.dest))
             elif err == "exists":
                 icon_name, cls = "action-unavailable-symbolic", "dim-label"
-                text, outcome = "Saltato: il file estratto esiste già (attiva Sovrascrivi)", 1
+                text, outcome = _("Skipped: the extracted file already exists (enable Overwrite)"), 1
             else:
                 icon_name, cls = "dialog-error-symbolic", "error"
-                text, outcome = f"Errore: {err}", 2
+                text, outcome = _("Error: {error}").format(error=err), 2
             self.icon.set_from_icon_name(icon_name)
             self.icon.remove_css_class("dim-label")
             if cls:
@@ -1067,6 +1138,7 @@ def run_gui(argv) -> int:
             self._native = None       # keep FileChooserNative alive
             self._banner_cb = None
             self._about = None
+            self.connect("map", lambda _w: _mark("window-mapped"))
 
             header = Gtk.HeaderBar()
             if use_csd:
@@ -1078,18 +1150,18 @@ def run_gui(argv) -> int:
             menu = Gio.Menu()
             if is_win:
                 section = Gio.Menu()
-                section.append("Controlla aggiornamenti…", "app.check-updates")
+                section.append(_("Check for updates…"), "app.check-updates")
                 menu.append_section(None, section)
             section = Gio.Menu()
-            section.append("Preferenze", "app.preferences")
+            section.append(_("Preferences"), "app.preferences")
             menu.append_section(None, section)
             section = Gio.Menu()
-            section.append(f"Informazioni su {APP_NAME}", "app.about")
+            section.append(_("About {app}").format(app=APP_NAME), "app.about")
             menu.append_section(None, section)
             self.menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
-                                           primary=True, tooltip_text="Menu principale (F10)")
+                                           primary=True, tooltip_text=_("Main menu (F10)"))
             header.pack_end(self.menu_btn)
-            self.spinner = Gtk.Spinner(tooltip_text="Estrazione in corso…")
+            self.spinner = Gtk.Spinner(tooltip_text=_("Extracting…"))
             header.pack_end(self.spinner)
             if is_win:  # Windows habit: a tap on Alt opens the main menu (F10 in GTK)
                 self._alt_solo = False
@@ -1097,7 +1169,8 @@ def run_gui(argv) -> int:
                 keys.connect("key-pressed", self._on_key_pressed)
                 keys.connect("key-released", self._on_key_released)
                 self.add_controller(keys)
-                self.connect("notify::is-active", lambda *_: setattr(self, "_alt_solo", False))
+                self.connect("notify::is-active",
+                             lambda _w, _p: setattr(self, "_alt_solo", False))
 
             root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             if not use_csd:
@@ -1117,7 +1190,7 @@ def run_gui(argv) -> int:
             self.banner_button = Gtk.Button(valign=Gtk.Align.CENTER)
             self.banner_button.connect("clicked", self._on_banner_button)
             close_btn = Gtk.Button(icon_name="window-close-symbolic",
-                                   valign=Gtk.Align.CENTER, tooltip_text="Chiudi")
+                                   valign=Gtk.Align.CENTER, tooltip_text=_("Close"))
             close_btn.add_css_class("flat")
             close_btn.connect("clicked", lambda _b: self.banner.set_reveal_child(False))
             for w in (self.banner_label, self.banner_button, close_btn):
@@ -1132,15 +1205,15 @@ def run_gui(argv) -> int:
             icon = Gtk.Image.new_from_icon_name("document-open-symbolic")
             icon.set_pixel_size(48)
             icon.set_margin_top(20)
-            title = Gtk.Label(label="Trascina qui file o cartelle .p7m")
+            title = Gtk.Label(label=_("Drop .p7m files or folders here"))
             title.add_css_class("title-4")
-            hint = Gtk.Label(label="Il documento originale viene estratto accanto al file firmato")
+            hint = Gtk.Label(label=_("The original document is extracted next to the signed file"))
             hint.add_css_class("dim-label")
             btns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                            halign=Gtk.Align.CENTER)
             btns.set_margin_bottom(20)
-            b_files = Gtk.Button(label="Scegli file…", action_name="app.open-files")
-            b_folder = Gtk.Button(label="Scegli cartella…", action_name="app.open-folder")
+            b_files = Gtk.Button(label=_("Choose files…"), action_name="app.open-files")
+            b_folder = Gtk.Button(label=_("Choose folder…"), action_name="app.open-folder")
             btns.append(b_files)
             btns.append(b_folder)
             for w in (icon, title, hint, btns):
@@ -1150,7 +1223,7 @@ def run_gui(argv) -> int:
             # --- results list ---------------------------------------------
             self.listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
             self.listbox.connect("row-activated", self._on_row_activated)
-            placeholder = Gtk.Label(label="I file estratti appariranno qui")
+            placeholder = Gtk.Label(label=_("Extracted files will appear here"))
             placeholder.add_css_class("dim-label")
             set_margins(placeholder, top=24, bottom=24)
             self.listbox.set_placeholder(placeholder)
@@ -1161,7 +1234,7 @@ def run_gui(argv) -> int:
 
             # --- bottom bar ------------------------------------------------
             bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            check = Gtk.CheckButton(label="Sovrascrivi i file già esistenti")
+            check = Gtk.CheckButton(label=_("Overwrite existing files"))
             check.connect("toggled", self.on_overwrite_toggled)
             self.summary = Gtk.Label(label="", hexpand=True, xalign=1.0)
             self.summary.add_css_class("dim-label")
@@ -1189,7 +1262,7 @@ def run_gui(argv) -> int:
                 return
             self._pending += 1
             self.spinner.start()
-            self.summary.set_label("Estrazione in corso…")
+            self.summary.set_label(_("Extracting…"))
             self._jobs.put(paths)
 
         def first_shown(self):
@@ -1222,10 +1295,10 @@ def run_gui(argv) -> int:
                 self._about = Gtk.AboutDialog(
                     transient_for=self, modal=True, hide_on_close=True,
                     program_name=APP_NAME, version=__version__,
-                    comments="Estrae il documento originale dai file firmati "
-                             "digitalmente (.p7m, CAdES).",
+                    comments=_("Extracts the original document from digitally "
+                               "signed files (.p7m, CAdES)."),
                     website=f"https://github.com/{GITHUB_REPO}",
-                    website_label="Progetto su GitHub",
+                    website_label=_("Project on GitHub"),
                     license_type=Gtk.License.MIT_X11,
                     copyright="© 2026 Daniel Grasso",
                     authors=["Daniel Grasso"],
@@ -1236,7 +1309,7 @@ def run_gui(argv) -> int:
         # --- update check (Windows) -----------------------------------------
         def check_updates(self, manual):
             if manual:
-                self.show_banner("Controllo aggiornamenti in corso…")
+                self.show_banner(_("Checking for updates…"))
 
             def work():
                 try:
@@ -1250,7 +1323,7 @@ def run_gui(argv) -> int:
         def _update_result(self, rel, err, manual):
             if err:
                 if manual:
-                    self.show_banner(f"Controllo aggiornamenti non riuscito: {err}")
+                    self.show_banner(_("Update check failed: {error}").format(error=err))
                 return False
             if is_newer(rel["version"]):
                 if manual:
@@ -1258,11 +1331,12 @@ def run_gui(argv) -> int:
                     UpdateDialog(self, rel).present()
                 else:
                     self.show_banner(
-                        f"È disponibile la versione {rel['version']} di {APP_NAME}.",
-                        "Aggiorna…", lambda: UpdateDialog(self, rel).present())
+                        _("Version {version} of {app} is available.").format(
+                            version=rel["version"], app=APP_NAME),
+                        _("Update…"), lambda: UpdateDialog(self, rel).present())
             elif manual:
-                self.show_banner(f"{APP_NAME} {__version__} è aggiornato: "
-                                 "nessuna nuova versione.")
+                self.show_banner(_("{app} {version} is up to date: no newer version.").format(
+                    app=APP_NAME, version=__version__))
             return False
 
         # --- signal handlers ----------------------------------------------
@@ -1296,32 +1370,33 @@ def run_gui(argv) -> int:
                 else:
                     Gio.AppInfo.launch_default_for_uri(dest.as_uri(), None)
             except (OSError, GLib.Error) as e:
-                self.show_banner(f"Impossibile aprire {dest.name}: {e}")
+                self.show_banner(_("Cannot open {name}: {error}").format(
+                    name=dest.name, error=e))
 
-        def on_drop_enter(self, _t, _x, _y):
+        def on_drop_enter(self, _target, _x, _y):
             self.dropzone.add_css_class("hover")
             return Gdk.DragAction.COPY
 
-        def on_drop_motion(self, _t, _x, _y):
+        def on_drop_motion(self, _target, _x, _y):
             return Gdk.DragAction.COPY
 
-        def on_drop_leave(self, _t):
+        def on_drop_leave(self, _target):
             self.dropzone.remove_css_class("hover")
 
-        def on_drop(self, _t, value, _x, _y):
+        def on_drop(self, _target, value, _x, _y):
             self.dropzone.remove_css_class("hover")
             self.enqueue([f.get_path() for f in value.get_files()])
             return True
 
         def on_pick_files(self):
             if has_filedialog:
-                dlg = Gtk.FileDialog(title="Scegli file .p7m")
+                dlg = Gtk.FileDialog(title=_("Choose .p7m files"))
                 f_p7m = Gtk.FileFilter()
-                f_p7m.set_name("File firmati (*.p7m)")
+                f_p7m.set_name(_("Signed files (*.p7m)"))
                 f_p7m.add_pattern("*.p7m")
                 f_p7m.add_pattern("*.P7M")
                 f_all = Gtk.FileFilter()
-                f_all.set_name("Tutti i file")
+                f_all.set_name(_("All files"))
                 f_all.add_pattern("*")
                 store = Gio.ListStore.new(Gtk.FileFilter)
                 store.append(f_p7m)
@@ -1331,20 +1406,20 @@ def run_gui(argv) -> int:
                 dlg.open_multiple(self, None, self._files_chosen)
             else:
                 self._native = Gtk.FileChooserNative.new(
-                    "Scegli file .p7m", self, Gtk.FileChooserAction.OPEN,
-                    "Apri", "Annulla")
+                    _("Choose .p7m files"), self, Gtk.FileChooserAction.OPEN,
+                    _("Open"), _("Cancel"))
                 self._native.set_select_multiple(True)
                 self._native.connect("response", self._native_response)
                 self._native.show()
 
         def on_pick_folder(self):
             if has_filedialog:
-                dlg = Gtk.FileDialog(title="Scegli una cartella")
+                dlg = Gtk.FileDialog(title=_("Choose a folder"))
                 dlg.select_folder(self, None, self._folder_chosen)
             else:
                 self._native = Gtk.FileChooserNative.new(
-                    "Scegli una cartella", self,
-                    Gtk.FileChooserAction.SELECT_FOLDER, "Apri", "Annulla")
+                    _("Choose a folder"), self,
+                    Gtk.FileChooserAction.SELECT_FOLDER, _("Open"), _("Cancel"))
                 self._native.connect("response", self._native_response)
                 self._native.show()
 
@@ -1377,8 +1452,8 @@ def run_gui(argv) -> int:
                 batch = self._jobs.get()
                 files = iter_p7m(host_paths(batch))
                 if not files:
-                    GLib.idle_add(self._set_summary, "Nessun file .p7m trovato")
-                keys = [next(self._seq) for _ in files]
+                    GLib.idle_add(self._set_summary, _("No .p7m files found."))
+                keys = [next(self._seq) for _f in files]
                 for key, f in zip(keys, files):  # every file shows up at once, queued
                     GLib.idle_add(self._row_add, key, f)
                 for key, f in zip(keys, files):
@@ -1435,7 +1510,8 @@ def run_gui(argv) -> int:
 
         def _set_counts(self):
             ok, skip, errn = self._counts
-            self._set_summary(f"{ok} estratti · {skip} saltati · {errn} errori")
+            self._set_summary(_("{ok} extracted · {skipped} skipped · {errors} errors").format(
+                ok=ok, skipped=skip, errors=errn))
 
         def _set_summary(self, text):
             self.summary.set_label(text)
@@ -1469,28 +1545,27 @@ def run_gui(argv) -> int:
     class DefaultAppDialog(Gtk.Window):
         def __init__(self, parent):
             super().__init__(transient_for=parent, modal=True, resizable=False,
-                             title="App predefinita", default_width=440)
+                             title=_("Default app"), default_width=440)
             init_dialog(self)
             self._parent = parent
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             set_margins(box, 24)
             icon = Gtk.Image.new_from_icon_name(APP_ID)
             icon.set_pixel_size(64)
-            heading = Gtk.Label(label=f"Vuoi aprire i file .p7m con {APP_NAME}?",
+            heading = Gtk.Label(label=_("Open .p7m files with {app}?").format(app=APP_NAME),
                                 wrap=True, justify=Gtk.Justification.CENTER)
             heading.add_css_class("title-2")
             body = Gtk.Label(
-                label="Con un doppio clic su un file firmato il documento "
-                      "originale viene estratto subito, accanto all'originale. "
-                      "Puoi cambiare idea in qualsiasi momento dalle "
-                      "Impostazioni di Windows.",
+                label=_("Double-clicking a signed file extracts the original "
+                        "document right away, next to the original. You can "
+                        "change your mind at any time in Windows Settings."),
                 wrap=True, justify=Gtk.Justification.CENTER, max_width_chars=48)
             body.add_css_class("dim-label")
-            self.dont_ask = Gtk.CheckButton(label="Non chiedere più",
+            self.dont_ask = Gtk.CheckButton(label=_("Don't ask again"),
                                             halign=Gtk.Align.CENTER)
-            later = Gtk.Button(label="Non ora")
+            later = Gtk.Button(label=_("Not now"))
             later.connect("clicked", lambda _b: self._finish(False))
-            yes = Gtk.Button(label="Imposta come predefinita")
+            yes = Gtk.Button(label=_("Set as default"))
             yes.add_css_class("suggested-action")
             yes.connect("clicked", lambda _b: self._finish(True))
             for w in (icon, heading, body, self.dont_ask, button_row(later, yes)):
@@ -1507,22 +1582,22 @@ def run_gui(argv) -> int:
             try:
                 outcome = win_make_default()
             except OSError as e:
-                self._parent.show_banner(f"Impostazione non riuscita: {e}")
+                self._parent.show_banner(_("Could not set the default: {error}").format(error=e))
                 return
             if outcome == "done":
                 self._parent.show_banner(
-                    f"{APP_NAME} è ora l'app predefinita per i file .p7m.")
+                    _("{app} is now the default app for .p7m files.").format(app=APP_NAME))
             else:
                 self._parent.show_banner(
-                    "Nella pagina Impostazioni appena aperta scegli "
-                    f"{APP_NAME} alla voce .p7m.")
+                    _("In the Settings page that just opened, choose {app} for .p7m.").format(
+                        app=APP_NAME))
 
     # --- update dialog (Windows) --------------------------------------------
 
     class UpdateDialog(Gtk.Window):
         def __init__(self, parent, rel):
             super().__init__(transient_for=parent, modal=True, resizable=False,
-                             title="Aggiornamento disponibile", default_width=480)
+                             title=_("Update available"), default_width=480)
             init_dialog(self)
             self._app = parent.get_application()
             self._rel = rel
@@ -1531,10 +1606,11 @@ def run_gui(argv) -> int:
 
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             set_margins(box, 24)
-            heading = Gtk.Label(label=f"{APP_NAME} {rel['version']} è disponibile",
-                                xalign=0.0, wrap=True)
+            heading = Gtk.Label(label=_("{app} {version} is available").format(
+                app=APP_NAME, version=rel["version"]), xalign=0.0, wrap=True)
             heading.add_css_class("title-2")
-            sub = Gtk.Label(label=f"Stai usando la versione {__version__}.", xalign=0.0)
+            sub = Gtk.Label(label=_("You are using version {version}.").format(
+                version=__version__), xalign=0.0)
             sub.add_css_class("dim-label")
             box.append(heading)
             box.append(sub)
@@ -1554,16 +1630,16 @@ def run_gui(argv) -> int:
             box.append(self.progress)
             box.append(self.status)
 
-            later = Gtk.Button(label="Più tardi")
+            later = Gtk.Button(label=_("Later"))
             later.connect("clicked", lambda _b: self.close())
             self.asset = pick_asset(rel["assets"], is_installed_build()) if is_win else None
             if self.asset and is_installed_build():
-                self.action = Gtk.Button(label="Scarica e installa")
+                self.action = Gtk.Button(label=_("Download and install"))
                 self.action.connect("clicked", self._download)
-                self.status.set_label("L'installazione sostituisce la versione "
-                                      "attuale; il programma verrà chiuso.")
+                self.status.set_label(_("The installation replaces the current "
+                                        "version; the app will close."))
             else:
-                self.action = Gtk.Button(label="Apri la pagina di download")
+                self.action = Gtk.Button(label=_("Open the download page"))
                 self.action.connect("clicked", self._open_page)
             self.action.add_css_class("suggested-action")
             box.append(button_row(later, self.action))
@@ -1579,10 +1655,11 @@ def run_gui(argv) -> int:
             self.close()
 
         def _download(self, _btn):
+            import tempfile
             self.action.set_sensitive(False)
             self.progress.set_visible(True)
             self.progress.set_fraction(0)
-            self.status.set_label("Scaricamento in corso…")
+            self.status.set_label(_("Downloading…"))
             dest = Path(tempfile.gettempdir()) / self.asset["name"]
 
             def progress(done, total):
@@ -1607,92 +1684,104 @@ def run_gui(argv) -> int:
 
         def _on_error(self, msg):
             self.progress.set_visible(False)
-            self.status.set_label(f"Download non riuscito: {msg}")
+            self.status.set_label(_("Download failed: {error}").format(error=msg))
             self.action.set_sensitive(True)
             return False
 
         def _on_downloaded(self, dest):
-            self.status.set_label("Avvio dell'installazione…")
+            self.status.set_label(_("Starting the installer…"))
             try:
                 os.startfile(str(dest))
             except OSError as e:
-                self.status.set_label(f"Impossibile avviare l'installer: {e}")
+                self.status.set_label(_("Cannot start the installer: {error}").format(error=e))
                 self.action.set_sensitive(True)
                 return False
             self._app.quit()  # let the installer replace the files in peace
             return False
 
-    # --- preferences (Windows) ----------------------------------------------
+    # --- preferences --------------------------------------------------------
 
     class PreferencesWindow(Gtk.Window):
-        SCHEMES = (("auto", "Automatico (segue il sistema)"),
-                   ("light", "Chiaro"), ("dark", "Scuro"))
-
         def __init__(self, parent):
             super().__init__(transient_for=parent, modal=True, resizable=False,
-                             title="Preferenze", default_width=540)
+                             title=_("Preferences"), default_width=540)
             init_dialog(self)
             self._parent = parent
             self.handler_label = None
+            self._schemes = (("auto", _("Automatic (follow the system)")),
+                             ("light", _("Light")), ("dark", _("Dark")))
+            self._languages = (("auto", _("Automatic (system language)")),
+                               ("it", "Italiano"), ("en", "English"))
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             set_margins(box, 24)
 
-            box.append(self._section("Aspetto"))
+            box.append(self._section(_("Appearance")))
             look = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-            keys = [k for k, _label in self.SCHEMES]
-            scheme = Gtk.DropDown.new_from_strings([label for _k, label in self.SCHEMES])
-            scheme.set_valign(Gtk.Align.CENTER)
-            current = settings.get("color_scheme")
-            scheme.set_selected(keys.index(current) if current in keys else 0)
-            scheme.connect("notify::selected", self._on_scheme)
             look.append(self._row(
-                "Tema", "«Automatico» segue le impostazioni di sistema", scheme))
+                _("Theme"), _("“Automatic” follows the system settings"),
+                self._dropdown(self._schemes, "color_scheme", self._on_scheme)))
+            look.append(self._row(
+                _("Language"), _("Takes effect at the next start"),
+                self._dropdown(self._languages, "language", self._on_language)))
             if is_win:
                 look.append(self._row(
-                    "Decorazioni native di Windows",
-                    "Barra del titolo di sistema al posto di quella GTK "
-                    "(ha effetto al prossimo avvio)",
+                    _("Native Windows decorations"),
+                    _("System title bar instead of GTK's (takes effect at the next start)"),
                     self._switch("native_decorations")))
             box.append(Gtk.Frame(child=look))
 
             if is_win:
-                box.append(self._section("Generale"))
+                box.append(self._section(_("General")))
                 general = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
                 general.append(self._row(
-                    "Chiedi di impostare come app predefinita all'avvio",
-                    f"Solo finché {APP_NAME} non è già l'app che apre i file .p7m",
+                    _("Ask to become the default app at start-up"),
+                    _("Only until {app} already opens .p7m files").format(app=APP_NAME),
                     self._switch("ask_default_app")))
                 general.append(self._row(
-                    "Controlla aggiornamenti all'avvio",
-                    "Una volta al giorno, dalle Release del progetto su GitHub",
+                    _("Check for updates at start-up"),
+                    _("Once a day, from the project's GitHub Releases"),
                     self._switch("check_updates")))
                 box.append(Gtk.Frame(child=general))
 
-                box.append(self._section("Esplora file"))
+                box.append(self._section(_("File Explorer")))
                 shell = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-                set_btn = Gtk.Button(label="Imposta…", valign=Gtk.Align.CENTER)
+                set_btn = Gtk.Button(label=_("Set…"), valign=Gtk.Align.CENTER)
                 set_btn.connect("clicked", self._on_set_default)
                 row, self.handler_label = self._row(
-                    "App predefinita per i file .p7m", self._handler_text(), set_btn,
+                    _("Default app for .p7m files"), self._handler_text(), set_btn,
                     return_subtitle=True)
                 shell.append(row)
                 reg = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
-                b_reg = Gtk.Button(label="Registra")
+                b_reg = Gtk.Button(label=_("Register"))
                 b_reg.connect("clicked", self._on_register)
-                b_unreg = Gtk.Button(label="Rimuovi")
+                b_unreg = Gtk.Button(label=_("Remove"))
                 b_unreg.connect("clicked", self._on_unregister)
                 reg.append(b_reg)
                 reg.append(b_unreg)
                 shell.append(self._row(
-                    "Menu contestuale e «Apri con»",
-                    "Voce «Estrai il contenuto» sui file .p7m e presenza "
-                    "nell'elenco delle app (utente corrente)", reg))
+                    _("Context menu and “Open with”"),
+                    _("“Extract content” entry on .p7m files and presence in the "
+                      "app list (current user)"), reg))
                 box.append(Gtk.Frame(child=shell))
             self.set_child(box)
 
+        @staticmethod
+        def _dropdown(options, key, callback):
+            keys = [k for k, _label in options]
+            drop = Gtk.DropDown.new_from_strings([label for _k, label in options])
+            drop.set_valign(Gtk.Align.CENTER)
+            current = settings.get(key)
+            drop.set_selected(keys.index(current) if current in keys else 0)
+            drop.connect("notify::selected", callback)
+            return drop
+
         def _on_scheme(self, drop, _pspec):
-            settings.set("color_scheme", self.SCHEMES[drop.get_selected()][0])
+            settings.set("color_scheme", self._schemes[drop.get_selected()][0])
             theme.apply()
+
+        def _on_language(self, drop, _pspec):
+            settings.set("language", self._languages[drop.get_selected()][0])
+            self._parent.show_banner(_("The new language will be used at the next start."))
 
         @staticmethod
         def _section(text):
@@ -1730,11 +1819,13 @@ def run_gui(argv) -> int:
         def _handler_text():
             try:
                 if win_is_default():
-                    return f"Attualmente: {APP_NAME}"
+                    return _("Currently: {app}").format(app=APP_NAME)
                 handler = win_current_handler()
             except OSError:
                 handler = None
-            return f"Attualmente: {handler}" if handler else "Attualmente: nessuna app"
+            if handler:
+                return _("Currently: {app}").format(app=handler)
+            return _("Currently: no app")
 
         def _refresh(self, message=None):
             self.handler_label.set_label(self._handler_text())
@@ -1745,26 +1836,28 @@ def run_gui(argv) -> int:
             try:
                 outcome = win_make_default()
             except OSError as e:
-                self._refresh(f"Impostazione non riuscita: {e}")
+                self._refresh(_("Could not set the default: {error}").format(error=e))
                 return
-            self._refresh(f"{APP_NAME} è ora l'app predefinita per i file .p7m."
-                          if outcome == "done" else
-                          f"Nella pagina Impostazioni appena aperta scegli {APP_NAME} "
-                          "alla voce .p7m.")
+            if outcome == "done":
+                self._refresh(_("{app} is now the default app for .p7m files.").format(
+                    app=APP_NAME))
+            else:
+                self._refresh(_("In the Settings page that just opened, choose {app} "
+                                "for .p7m.").format(app=APP_NAME))
 
         def _on_register(self, _btn):
             try:
                 win_register()
-                self._refresh("Integrazione con Esplora file registrata.")
+                self._refresh(_("File Explorer integration registered."))
             except OSError as e:
-                self._refresh(f"Registrazione non riuscita: {e}")
+                self._refresh(_("Registration failed: {error}").format(error=e))
 
         def _on_unregister(self, _btn):
             try:
                 win_unregister()
-                self._refresh("Voci di Esplora file rimosse per l'utente corrente.")
+                self._refresh(_("File Explorer entries removed for the current user."))
             except OSError as e:
-                self._refresh(f"Rimozione non riuscita: {e}")
+                self._refresh(_("Removal failed: {error}").format(error=e))
 
     # --- application --------------------------------------------------------
 
@@ -1782,6 +1875,7 @@ def run_gui(argv) -> int:
         def do_startup(self):
             nonlocal theme
             Gtk.Application.do_startup(self)
+            _mark("startup")
             display = Gdk.Display.get_default()
             bundle = getattr(sys, "_MEIPASS", None)
             if bundle:  # icons shipped inside the PyInstaller bundle
@@ -1801,18 +1895,18 @@ def run_gui(argv) -> int:
                 display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             theme = ThemeManager()
 
-            self._action("quit", lambda *_: self.quit(), ["<Control>q"])
-            self._action("about", lambda *_: self._win().show_about())
-            self._action("open-files", lambda *_: self._win().on_pick_files(),
+            self._action("quit", lambda _a, _p: self.quit(), ["<Control>q"])
+            self._action("about", lambda _a, _p: self._win().show_about())
+            self._action("open-files", lambda _a, _p: self._win().on_pick_files(),
                          ["<Control>o"])
-            self._action("open-folder", lambda *_: self._win().on_pick_folder(),
+            self._action("open-folder", lambda _a, _p: self._win().on_pick_folder(),
                          ["<Control><Shift>o"])
             self._action("preferences",
-                         lambda *_: PreferencesWindow(self._win()).present(),
+                         lambda _a, _p: PreferencesWindow(self._win()).present(),
                          ["<Control>comma"])
             if is_win:
                 self._action("check-updates",
-                             lambda *_: self._win().check_updates(manual=True))
+                             lambda _a, _p: self._win().check_updates(manual=True))
 
         def _action(self, name, callback, accels=()):
             action = Gio.SimpleAction.new(name, None)
@@ -1835,6 +1929,7 @@ def run_gui(argv) -> int:
         def do_command_line(self, cmdline):
             # Runs in the primary instance, also for command lines forwarded
             # by later launches (their cwd may differ from ours).
+            _mark("command-line")
             args = list(cmdline.get_arguments())[1:]
             try:
                 ns, _unknown = build_parser().parse_known_args(args)
@@ -1864,30 +1959,33 @@ def run_gui(argv) -> int:
 
 
 def main() -> int:
+    _mark("main")
     # PyInstaller --windowed builds have no console streams.
     if sys.stdout is None:
         sys.stdout = open(os.devnull, "w", encoding="utf-8")
     if sys.stderr is None:
         sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
+    settings = Settings()
+    setup_i18n(settings.get("language"))
     args = build_parser().parse_args()
 
     if args.check_update:
         return run_check_update()
     if args.register or args.unregister:
         if sys.platform != "win32":
-            print("Opzione disponibile solo su Windows.", file=sys.stderr)
+            print(_("Option available on Windows only."), file=sys.stderr)
             return 2
         if args.register:
             win_register()
-            print("Integrazione con Esplora file registrata per l'utente corrente.")
+            print(_("File Explorer integration registered for the current user."))
         else:
             win_unregister()
-            print("Integrazione con Esplora file rimossa per l'utente corrente.")
+            print(_("File Explorer integration removed for the current user."))
         return 0
     if args.paths and not args.gui:
         return run_cli(args.paths, args.overwrite)
-    return run_gui(sys.argv)
+    return run_gui(sys.argv, settings)
 
 
 if __name__ == "__main__":

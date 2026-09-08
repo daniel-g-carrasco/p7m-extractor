@@ -87,8 +87,10 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
   the encoding used by common Italian signing tools
 - Output is written next to the source file, never modifying the original
 - **Light / dark theme** following the system (Windows personalization
-  setting, freedesktop settings portal on Linux), or forced from *Preferenze*
-- UI language is Italian (the `.p7m` format is, after all, an Italian affair)
+  setting, freedesktop settings portal on Linux), or forced from *Preferences*
+- **English and Italian** UI, following the desktop language (or forced from
+  *Preferences*); the Windows installer is bilingual too and hands its
+  language choice over to the app
 
 ### Windows integration
 
@@ -174,7 +176,8 @@ release tag), ownership verification of `danielgrasso.com` for the
 
 ```bash
 python tests/test_extract.py     # self-contained test suite, no deps
-python tools/make_icon.py        # regenerate assets/icon.* and data/icons PNGs (Pillow)
+python tools/compile_po.py       # compile po/*.po into locale/ (needed to see translations)
+python tools/make_icon.py        # regenerate assets/icon.*, data/icons PNGs, installer bitmaps (Pillow)
 desktop-file-validate data/com.danielgrasso.P7mExtractor.desktop
 appstreamcli validate --no-net data/com.danielgrasso.P7mExtractor.metainfo.xml
 ```
@@ -188,6 +191,13 @@ unused locales and icon-theme variants to keep it in check.
 
 Preferences are stored in `%LOCALAPPDATA%\p7m-extractor\settings.ini` on
 Windows and `$XDG_CONFIG_HOME/p7m-extractor/settings.ini` on Linux.
+
+Translations live in `po/` (English source strings in the code, one `.po`
+per language). To refresh the template after changing strings:
+`xgettext --from-code=UTF-8 --keyword=_ -o po/p7m-extractor.pot p7m_extractor.py`,
+then merge with `msgmerge -U po/it.po po/p7m-extractor.pot`.
+Set `P7M_STARTUP_LOG=<file>` to get start-up timestamps appended to a file
+(profiling aid).
 
 ## License
 

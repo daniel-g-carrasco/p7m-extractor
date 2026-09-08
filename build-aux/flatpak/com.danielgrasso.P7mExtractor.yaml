@@ -30,6 +30,7 @@ modules:
     build-commands:
       # pure Python, PyGObject and GTK 4 come with the GNOME runtime
       - install -Dm755 p7m_extractor.py /app/bin/p7m-extractor
+      - python3 tools/compile_po.py --dest /app/share/locale
       - install -Dm644 data/com.danielgrasso.P7mExtractor.desktop -t /app/share/applications
       - install -Dm644 data/com.danielgrasso.P7mExtractor.metainfo.xml -t /app/share/metainfo
       - install -Dm644 data/icons/hicolor/scalable/apps/com.danielgrasso.P7mExtractor.svg -t /app/share/icons/hicolor/scalable/apps
