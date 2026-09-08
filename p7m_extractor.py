@@ -17,12 +17,14 @@ import argparse
 import base64
 import binascii
 import configparser
+import itertools
 import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from datetime import date
@@ -193,15 +195,31 @@ def _strip_p7m(name: str) -> str:
     return name[:-4] if name.lower().endswith(".p7m") and len(name) > 4 else name + ".out"
 
 
-def extract_file(src: Path, overwrite: bool = False) -> tuple[Path, int]:
+_CHUNK = 1 << 20  # 1 MiB: I/O granularity for progress reporting
+
+
+def extract_file(src: Path, overwrite: bool = False, progress=None) -> tuple[Path, int]:
     """Extract src next to itself. Return (dest, signature_layers).
 
     Nested envelopes (file.pdf.p7m.p7m) are unwrapped in a single pass.
+    progress(fraction), if given, is called with values from 0.0 to 1.0
+    while the source is read (first half) and the output written (second
+    half): large files on network shares can take a while.
     Raises FileExistsError when dest exists and overwrite is False,
     BerError for unsupported/corrupt input, OSError on I/O problems.
     """
     src = Path(src)
-    content = extract_econtent(decode_container(src.read_bytes()))
+    size = max(src.stat().st_size, 1)
+    raw = bytearray()
+    with open(src, "rb") as f:
+        while True:
+            chunk = f.read(_CHUNK)
+            if not chunk:
+                break
+            raw += chunk
+            if progress:
+                progress(0.5 * min(len(raw), size) / size)
+    content = extract_econtent(decode_container(bytes(raw)))
     name = _strip_p7m(src.name)
     layers = 1
     while True:
@@ -214,7 +232,14 @@ def extract_file(src: Path, overwrite: bool = False) -> tuple[Path, int]:
     dest = src.with_name(name)
     if dest.exists() and not overwrite:
         raise FileExistsError(str(dest))
-    dest.write_bytes(content)
+    total = max(len(content), 1)
+    with open(dest, "wb") as out:
+        for i in range(0, len(content), _CHUNK):
+            out.write(content[i:i + _CHUNK])
+            if progress:
+                progress(0.5 + 0.5 * min(i + _CHUNK, total) / total)
+    if progress:
+        progress(1.0)
     return dest, layers
 
 
@@ -684,15 +709,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _close_splash() -> None:
-    """Close the start-up splash of the Windows build (PyInstaller), if any."""
-    try:
-        import pyi_splash  # exists only inside a frozen build with a splash
-        pyi_splash.close()
-    except Exception:  # noqa: BLE001 - any failure here is irrelevant
-        pass
-
-
 # ---------------------------------------------------------------------------
 # GTK 4 GUI
 # ---------------------------------------------------------------------------
@@ -730,7 +746,6 @@ def run_gui(argv) -> int:
         gi.require_version("Gdk", "4.0")
         from gi.repository import Gdk, Gio, GLib, Gtk, Pango
     except (ImportError, ValueError):
-        _close_splash()
         print(
             "GTK 4 / PyGObject non disponibili. Installa:\n"
             "  Debian/Ubuntu:  sudo apt install python3-gi gir1.2-gtk-4.0\n"
@@ -920,6 +935,77 @@ def run_gui(argv) -> int:
             if (namespace, key) == ("org.freedesktop.appearance", "color-scheme"):
                 self.apply()
 
+    # --- results list row -------------------------------------------------
+
+    class ResultRow(Gtk.ListBoxRow):
+        """One file in the results list: queued → extracting → outcome."""
+
+        def __init__(self, src, on_reveal):
+            super().__init__(activatable=False)
+            self._on_reveal = on_reveal
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            set_margins(box, top=6, bottom=6, start=10, end=10)
+            self.icon = Gtk.Image.new_from_icon_name("content-loading-symbolic")
+            self.icon.add_css_class("dim-label")
+            self.spinner = Gtk.Spinner()
+            self.stack = Gtk.Stack(valign=Gtk.Align.CENTER)
+            self.stack.add_named(self.icon, "icon")
+            self.stack.add_named(self.spinner, "spinner")
+            texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True,
+                            valign=Gtk.Align.CENTER)
+            name = Gtk.Label(label=src.name, xalign=0.0)
+            name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            self.status = Gtk.Label(label="In coda", xalign=0.0)
+            self.status.set_ellipsize(Pango.EllipsizeMode.END)
+            self.status.add_css_class("dim-label")
+            self.bar = Gtk.ProgressBar(visible=False)
+            self.bar.set_margin_top(4)
+            for w in (name, self.status, self.bar):
+                texts.append(w)
+            self.open_btn = Gtk.Button(icon_name="folder-open-symbolic",
+                                       valign=Gtk.Align.CENTER, visible=False,
+                                       tooltip_text="Apri la cartella")
+            self.open_btn.add_css_class("flat")
+            for w in (self.stack, texts, self.open_btn):
+                box.append(w)
+            self.set_child(box)
+
+        def start(self):
+            self.status.set_label("Estrazione in corso…")
+            self.bar.set_fraction(0.0)
+            self.bar.set_visible(True)
+            self.spinner.start()
+            self.stack.set_visible_child_name("spinner")
+
+        def progress(self, fraction):
+            self.bar.set_fraction(fraction)
+            self.status.set_label(f"Estrazione in corso… {int(fraction * 100)}%")
+
+        def finish(self, dest, layers, err):
+            """Show the outcome; return the counter to bump (0 ok, 1 skipped, 2 error)."""
+            self.spinner.stop()
+            self.bar.set_visible(False)
+            if err is None:
+                icon_name, cls = "object-select-symbolic", None
+                extra = f" ({layers} firme annidate)" if layers > 1 else ""
+                text, outcome = f"Estratto{extra} → {dest.name}", 0
+                self.open_btn.set_visible(True)
+                self.open_btn.connect(
+                    "clicked", lambda _b, p=dest.absolute(): self._on_reveal(p))
+            elif err == "exists":
+                icon_name, cls = "action-unavailable-symbolic", "dim-label"
+                text, outcome = "Saltato: il file estratto esiste già (attiva Sovrascrivi)", 1
+            else:
+                icon_name, cls = "dialog-error-symbolic", "error"
+                text, outcome = f"Errore: {err}", 2
+            self.icon.set_from_icon_name(icon_name)
+            self.icon.remove_css_class("dim-label")
+            if cls:
+                self.icon.add_css_class(cls)
+            self.stack.set_visible_child_name("icon")
+            self.status.set_label(text)
+            return outcome
+
     # --- main window ------------------------------------------------------
 
     class Window(Gtk.ApplicationWindow):
@@ -933,6 +1019,8 @@ def run_gui(argv) -> int:
             self._jobs: queue.Queue = queue.Queue()
             self._counts = [0, 0, 0]  # ok, skipped, errors
             self._pending = 0         # batches queued or running
+            self._rows = {}           # row key -> ResultRow
+            self._seq = itertools.count()
             self._native = None       # keep FileChooserNative alive
             self._banner_cb = None
             self._about = None
@@ -1227,15 +1315,32 @@ def run_gui(argv) -> int:
                 files = iter_p7m(host_paths(batch))
                 if not files:
                     GLib.idle_add(self._set_summary, "Nessun file .p7m trovato")
-                for f in files:
+                keys = [next(self._seq) for _ in files]
+                for key, f in zip(keys, files):  # every file shows up at once, queued
+                    GLib.idle_add(self._row_add, key, f)
+                for key, f in zip(keys, files):
+                    GLib.idle_add(self._row_call, key, "start")
                     try:
-                        dest, layers = extract_file(f, self._overwrite)
-                        GLib.idle_add(self._add_row, f, dest, layers, None)
+                        dest, layers = extract_file(f, self._overwrite,
+                                                    self._progress_reporter(key))
+                        GLib.idle_add(self._row_done, key, dest, layers, None)
                     except FileExistsError:
-                        GLib.idle_add(self._add_row, f, None, 0, "exists")
+                        GLib.idle_add(self._row_done, key, None, 0, "exists")
                     except (BerError, OSError) as e:
-                        GLib.idle_add(self._add_row, f, None, 0, str(e))
+                        GLib.idle_add(self._row_done, key, None, 0, str(e))
                 GLib.idle_add(self._batch_done)
+
+        def _progress_reporter(self, key):
+            """progress(fraction) callback for extract_file, throttled so the
+            main loop is not flooded on fast disks."""
+            last = [-1.0, 0.0]  # fraction, monotonic time
+
+            def report(fraction):
+                now = time.monotonic()
+                if fraction - last[0] >= 0.02 and now - last[1] >= 0.05:
+                    last[0], last[1] = fraction, now
+                    GLib.idle_add(self._row_call, key, "progress", fraction)
+            return report
 
         # --- UI updates (main thread) -------------------------------------
         def _batch_done(self):
@@ -1246,50 +1351,24 @@ def run_gui(argv) -> int:
                     self._set_counts()
             return False
 
-        def _add_row(self, src, dest, layers, err):
-            if err is None:
-                icon_name, cls = "object-select-symbolic", None
-                extra = f" ({layers} firme annidate)" if layers > 1 else ""
-                status = f"Estratto{extra} → {dest.name}"
-                self._counts[0] += 1
-            elif err == "exists":
-                icon_name, cls = "action-unavailable-symbolic", "dim-label"
-                status = "Saltato: il file estratto esiste già (attiva Sovrascrivi)"
-                self._counts[1] += 1
-            else:
-                icon_name, cls = "dialog-error-symbolic", "error"
-                status = f"Errore: {err}"
-                self._counts[2] += 1
-
-            row = Gtk.ListBoxRow(activatable=False)
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            set_margins(box, top=6, bottom=6, start=10, end=10)
-            icon = Gtk.Image.new_from_icon_name(icon_name)
-            if cls:
-                icon.add_css_class(cls)
-            texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
-            name = Gtk.Label(label=src.name, xalign=0.0)
-            name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-            sub = Gtk.Label(label=status, xalign=0.0)
-            sub.set_ellipsize(Pango.EllipsizeMode.END)
-            sub.add_css_class("dim-label")
-            texts.append(name)
-            texts.append(sub)
-            box.append(icon)
-            box.append(texts)
-            if err is None:
-                open_btn = Gtk.Button(icon_name="folder-open-symbolic",
-                                      valign=Gtk.Align.CENTER,
-                                      tooltip_text="Apri la cartella")
-                open_btn.add_css_class("flat")
-                open_btn.connect(
-                    "clicked",
-                    lambda _b, p=dest.resolve(): self._reveal(p))
-                box.append(open_btn)
-            row.set_child(box)
+        def _row_add(self, key, src):
+            row = ResultRow(src, self._reveal)
+            self._rows[key] = row
             self.listbox.append(row)
-            self._set_counts()
             return False  # one-shot GLib.idle_add
+
+        def _row_call(self, key, method, *args):
+            row = self._rows.get(key)
+            if row is not None:
+                getattr(row, method)(*args)
+            return False
+
+        def _row_done(self, key, dest, layers, err):
+            row = self._rows.pop(key, None)
+            if row is not None:
+                self._counts[row.finish(dest, layers, err)] += 1
+                self._set_counts()
+            return False
 
         def _set_counts(self):
             ok, skip, errn = self._counts
@@ -1306,8 +1385,12 @@ def run_gui(argv) -> int:
             URIs on Windows, hence the per-platform paths.
             """
             if is_win:
+                # Explorer wants exactly  /select,"<path>" : passing a list
+                # lets Popen quote the whole switch, which Explorer ignores
+                # (it then opens Documents). Drive letters are kept as they
+                # are (no resolve()), so mapped network drives stay mapped.
                 try:
-                    subprocess.Popen(["explorer", f"/select,{dest}"])
+                    subprocess.Popen(f'explorer /select,"{dest}"')
                 except OSError:
                     os.startfile(dest.parent)
             elif has_filedialog:  # GTK >= 4.10
@@ -1704,13 +1787,10 @@ def run_gui(argv) -> int:
             win.present()
             if paths:
                 win.enqueue(list(paths))
-            _close_splash()
             if first:
                 GLib.idle_add(win.first_shown)
 
-    status = App().run(argv)
-    _close_splash()  # remote instance: the command line went to the primary
-    return status
+    return App().run(argv)
 
 
 # ---------------------------------------------------------------------------
@@ -1726,10 +1806,8 @@ def main() -> int:
     args = build_parser().parse_args()
 
     if args.check_update:
-        _close_splash()
         return run_check_update()
     if args.register or args.unregister:
-        _close_splash()
         if sys.platform != "win32":
             print("Opzione disponibile solo su Windows.", file=sys.stderr)
             return 2
@@ -1741,7 +1819,6 @@ def main() -> int:
             print("Integrazione con Esplora file rimossa per l'utente corrente.")
         return 0
     if args.paths and not args.gui:
-        _close_splash()
         return run_cli(args.paths, args.overwrite)
     return run_gui(sys.argv)
 

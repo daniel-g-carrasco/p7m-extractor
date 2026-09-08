@@ -48,7 +48,6 @@ jobs:
             mingw-w64-x86_64-python
             mingw-w64-x86_64-python-gobject
             mingw-w64-x86_64-pyinstaller
-            mingw-w64-x86_64-tk
             mingw-w64-x86_64-ca-certificates
       - name: Build with PyInstaller
         run: pyinstaller --noconfirm p7m-extractor.spec

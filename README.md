@@ -76,8 +76,8 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 ## Features
 
 - **Drag & drop** files *or folders* (folders are scanned recursively)
-- **Batch**: hundreds of files in one go, results listed live, spinner while
-  work is in progress
+- **Batch**: hundreds of files in one go, every file listed at once with its
+  state (queued, extracting with progress, done)
 - **Single window**: opening more files (double-click, context menu, several
   files selected at once) adds them to the window already open
 - **Nested signatures** (`doc.pdf.p7m.p7m`) unwrapped in a single pass
@@ -91,9 +91,10 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 
 ### Windows integration
 
-- **Double-click** a `.p7m` to extract it on the spot (file association).
-  A splash screen appears immediately, before GTK finishes loading, in the
-  light or dark GTK palette depending on the Windows "Apps mode" setting.
+- **Double-click** a `.p7m` to extract it on the spot (file association):
+  the file lands in the window's list as *In coda*, then shows its
+  extraction progress (read and write, useful on network shares) and the
+  outcome. Further files join the queue in the same window.
 - The main menu opens with F10 (GTK convention) or a tap on Alt (Windows
   habit).
 - **Context menu**: right-click one or more `.p7m` files →
@@ -173,7 +174,6 @@ release tag), ownership verification of `danielgrasso.com` for the
 ```bash
 python tests/test_extract.py     # self-contained test suite, no deps
 python tools/make_icon.py        # regenerate assets/icon.* and data/icons PNGs (Pillow)
-python tools/make_splash.py      # regenerate assets/splash.png (Pillow)
 desktop-file-validate data/com.danielgrasso.P7mExtractor.desktop
 appstreamcli validate --no-net data/com.danielgrasso.P7mExtractor.metainfo.xml
 ```

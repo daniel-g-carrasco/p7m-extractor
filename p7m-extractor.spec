@@ -62,64 +62,14 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
-# Start-up splash (Windows only): drawn by the bootloader long before Python
-# and GTK are loaded, so a double-click on a .p7m gives immediate feedback.
-# The app closes it (pyi_splash.close()) as soon as its window is on screen.
-# The image is 1.5x (600x225): the process is DPI aware (see the manifest
-# below), so it is shown pixel for pixel, never scaled by Windows.
-splash = None
-if WIN:
-    try:
-        splash = Splash(
-            'assets/splash.png',
-            binaries=a.binaries,
-            datas=a.datas,
-            text_pos=(210, 183),
-            text_size=10,
-            text_color='#8e8e8e',  # dim label readable on both palettes
-            text_default='Avvio in corso…',
-            minify_script=True,
-            always_on_top=True,
-        )
-        print('splash screen: enabled')
-    except BaseException as e:  # noqa: BLE001 - Tcl/Tk missing in the build env
-        print(f'WARNING: splash screen disabled: {e!r}')
-        splash = None
-
-if splash:
-    # Dark variant. The bootloader shows the PNG above before Python runs, so
-    # the choice has to happen inside its Tcl script: right after the image
-    # is loaded, ask Windows whether "Apps mode" is dark (AppsUseLightTheme
-    # = 0) and swap in assets/splash-dark.png, embedded here as base64.
-    import base64
-    marker = 'splash_image put $_image_data'
-    dark_png = os.path.join(SPECPATH, 'assets', 'splash-dark.png')
-    if marker in splash.script and os.path.isfile(dark_png):
-        with open(dark_png, 'rb') as f:
-            dark_b64 = base64.b64encode(f.read()).decode('ascii')
-        tcl = (
-            marker + '\n'
-            'if {![catch {exec reg query '
-            '{HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize} '
-            '/v AppsUseLightTheme} _reg_out] && '
-            '[regexp -line {REG_DWORD\\s+0x0\\s*$} $_reg_out]} {\n'
-            'splash_image blank\n'
-            'splash_image put {' + dark_b64 + '}\n'
-            '}\n'
-        )
-        splash.script = splash.script.replace(marker, tcl, 1)
-        print('splash screen: dark variant enabled')
-    else:
-        print('WARNING: splash dark variant not injected (script marker or PNG missing)')
-
 # Windows: embed our own manifest, which declares per-monitor DPI awareness
-# (crisp, stable splash on HiDPI screens) on top of PyInstaller's defaults.
+# on top of PyInstaller's defaults (GTK would otherwise switch the process
+# to per-monitor awareness only during its own initialisation).
 MANIFEST = os.path.join(SPECPATH, 'build-aux', 'windows', 'p7m-extractor.manifest') if WIN else None
 
 exe = EXE(
     pyz,
     a.scripts,
-    *([splash] if splash else []),
     exclude_binaries=True,
     name='p7m-extractor',
     console=False,
@@ -129,7 +79,6 @@ exe = EXE(
 
 coll = COLLECT(
     exe,
-    *([splash.binaries] if splash else []),
     a.binaries,
     a.datas,
     name='p7m-extractor',

@@ -110,8 +110,11 @@ def main() -> int:
         assert dest.read_bytes() == PAYLOAD
 
         expect_raises(FileExistsError, px.extract_file, f)
-        dest, _ = px.extract_file(f, overwrite=True)
+        seen = []
+        dest, _ = px.extract_file(f, overwrite=True, progress=seen.append)
         assert dest.read_bytes() == PAYLOAD
+        # progress climbs monotonically from the read phase to 1.0
+        assert seen == sorted(seen) and seen[-1] == 1.0 and 0.0 < seen[0] <= 0.5
 
         # folder scan finds .p7m case-insensitively, recursively
         (td / "sub").mkdir()
