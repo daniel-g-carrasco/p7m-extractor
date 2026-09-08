@@ -20,8 +20,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y desktop-file-utils appstream
-          desktop-file-validate data/com.neistar.p7m.P7mExtractor.desktop
-          appstreamcli validate --no-net data/com.neistar.p7m.P7mExtractor.metainfo.xml
+          desktop-file-validate data/io.github.daniel_g_carrasco.p7m_extractor.desktop
+          appstreamcli validate --no-net data/io.github.daniel_g_carrasco.p7m_extractor.metainfo.xml
       - name: Check that the tag matches __version__
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -60,7 +60,7 @@ jobs:
           ls "$I"/libgtk-4-*.dll
           test -f "$I/gdbus.exe"          # single-instance support (GApplication)
           test -f "$I/certs/ca-bundle.crt" # TLS for the update check
-          test -f "$I/share/icons/hicolor/scalable/apps/com.neistar.p7m.P7mExtractor.svg"
+          test -f "$I/share/icons/hicolor/scalable/apps/io.github.daniel_g_carrasco.p7m_extractor.svg"
           test -f "$I/share/locale/it/LC_MESSAGES/p7m-extractor.mo"
       - name: Ensure GLib schemas and icon themes are bundled
         run: |
@@ -174,13 +174,13 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: p7m-extractor-${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}-linux-x64.flatpak
-          manifest-path: build-aux/flatpak/com.neistar.p7m.P7mExtractor.yaml
+          manifest-path: build-aux/flatpak/io.github.daniel_g_carrasco.p7m_extractor.yaml
           cache-key: flatpak-builder-${{ github.sha }}
           upload-artifact: true
       - name: Lint the manifest for Flathub (informational)
         run: |
           if command -v flatpak-builder-lint >/dev/null 2>&1; then
-            flatpak-builder-lint --exceptions manifest build-aux/flatpak/com.neistar.p7m.P7mExtractor.yaml || true
+            flatpak-builder-lint --exceptions manifest build-aux/flatpak/io.github.daniel_g_carrasco.p7m_extractor.yaml || true
           else
             echo "flatpak-builder-lint not available in this image"
           fi
