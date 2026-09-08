@@ -77,7 +77,8 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 
 - **Drag & drop** files *or folders* (folders are scanned recursively)
 - **Batch**: hundreds of files in one go, every file listed at once with its
-  state (queued, extracting with progress, done)
+  state (queued, extracting with progress, done); double-click a finished
+  row to open the document, or use its folder button to reveal it
 - **Single window**: opening more files (double-click, context menu, several
   files selected at once) adds them to the window already open
 - **Nested signatures** (`doc.pdf.p7m.p7m`) unwrapped in a single pass
@@ -96,7 +97,7 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
   extraction progress (read and write, useful on network shares) and the
   outcome. Further files join the queue in the same window.
 - The main menu opens with F10 (GTK convention) or a tap on Alt (Windows
-  habit).
+  habit); another tap on Alt closes it.
 - **Context menu**: right-click one or more `.p7m` files →
   *Estrai il contenuto con P7M Extractor*. On Windows 11 the entry lives
   under *Mostra altre opzioni* (Shift+F10), like every classic shell verb.

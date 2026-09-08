@@ -630,6 +630,45 @@ def win_make_default() -> str:
     return "settings"
 
 
+def win_allow_foreground() -> None:
+    """Let the next process that asks take the foreground. Windows grants
+    that right only to the process the user just launched (us): when we hand
+    our files to an already running instance, it needs it to raise its window."""
+    try:
+        import ctypes
+        ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
+    except (AttributeError, OSError):
+        pass
+
+
+def win_bring_to_front(title: str) -> None:
+    """Restore (if minimized) and raise this process's top-level window
+    called `title`."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+    except (AttributeError, OSError):
+        return
+    pid = os.getpid()
+    buf = ctypes.create_unicode_buffer(256)
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _lparam):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid and user32.IsWindowVisible(hwnd):
+            user32.GetWindowTextW(hwnd, buf, 256)
+            if buf.value == title:
+                if user32.IsIconic(hwnd):
+                    user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                user32.SetForegroundWindow(hwnd)
+                return 0  # found: stop enumerating
+        return 1
+
+    user32.EnumWindows(visit, 0)
+
+
 def win_dark_titlebars(dark: bool) -> None:
     """Ask DWM to paint the native title bars of this process dark or light
     (Windows 10 1809+; silently ignored elsewhere)."""
@@ -941,8 +980,9 @@ def run_gui(argv) -> int:
         """One file in the results list: queued → extracting → outcome."""
 
         def __init__(self, src, on_reveal):
-            super().__init__(activatable=False)
+            super().__init__(activatable=False)  # activatable once extracted
             self._on_reveal = on_reveal
+            self.dest = None
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             set_margins(box, top=6, bottom=6, start=10, end=10)
             self.icon = Gtk.Image.new_from_icon_name("content-loading-symbolic")
@@ -989,9 +1029,12 @@ def run_gui(argv) -> int:
                 icon_name, cls = "object-select-symbolic", None
                 extra = f" ({layers} firme annidate)" if layers > 1 else ""
                 text, outcome = f"Estratto{extra} → {dest.name}", 0
+                self.dest = dest.absolute()
+                self.set_activatable(True)  # double-click / Enter opens the document
+                self.set_tooltip_text(str(self.dest))
                 self.open_btn.set_visible(True)
                 self.open_btn.connect(
-                    "clicked", lambda _b, p=dest.absolute(): self._on_reveal(p))
+                    "clicked", lambda _b: self._on_reveal(self.dest))
             elif err == "exists":
                 icon_name, cls = "action-unavailable-symbolic", "dim-label"
                 text, outcome = "Saltato: il file estratto esiste già (attiva Sovrascrivi)", 1
@@ -1105,7 +1148,8 @@ def run_gui(argv) -> int:
             content.append(self.dropzone)
 
             # --- results list ---------------------------------------------
-            self.listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+            self.listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
+            self.listbox.connect("row-activated", self._on_row_activated)
             placeholder = Gtk.Label(label="I file estratti appariranno qui")
             placeholder.add_css_class("dim-label")
             set_margins(placeholder, top=24, bottom=24)
@@ -1230,10 +1274,29 @@ def run_gui(argv) -> int:
         def _on_key_released(self, _ctl, keyval, _code, _state):
             if keyval in (Gdk.KEY_Alt_L, Gdk.KEY_Alt_R) and self._alt_solo:
                 self._alt_solo = False
-                self.menu_btn.popup()
+                if self.menu_btn.get_active():
+                    self.menu_btn.popdown()
+                else:
+                    self.menu_btn.popup()
 
         def on_overwrite_toggled(self, check):
             self._overwrite = check.get_active()
+
+        def _on_row_activated(self, _listbox, row):
+            """Open the extracted document with its default application."""
+            dest = getattr(row, "dest", None)
+            if dest is None:
+                return
+            try:
+                if is_win:
+                    os.startfile(str(dest))
+                elif has_filedialog:  # GTK >= 4.10
+                    Gtk.FileLauncher.new(Gio.File.new_for_path(str(dest))).launch(
+                        self, None, None)
+                else:
+                    Gio.AppInfo.launch_default_for_uri(dest.as_uri(), None)
+            except (OSError, GLib.Error) as e:
+                self.show_banner(f"Impossibile aprire {dest.name}: {e}")
 
         def on_drop_enter(self, _t, _x, _y):
             self.dropzone.add_css_class("hover")
@@ -1785,11 +1848,15 @@ def run_gui(argv) -> int:
             first = self.window is None
             win = self._win()
             win.present()
+            if is_win and not first:  # files handed over by a later launch
+                win_bring_to_front(APP_NAME)
             if paths:
                 win.enqueue(list(paths))
             if first:
                 GLib.idle_add(win.first_shown)
 
+    if is_win:
+        win_allow_foreground()
     return App().run(argv)
 
 
