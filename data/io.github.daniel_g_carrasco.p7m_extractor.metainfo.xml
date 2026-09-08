@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata: shown by GNOME Software / Flathub. -->
+<component type="desktop-application">
+  <id>io.github.daniel_g_carrasco.p7m_extractor</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>P7M Extractor</name>
+  <summary>Extract signed .p7m documents</summary>
+  <summary xml:lang="it">Estrai i documenti dai file .p7m</summary>
+
+  <developer id="io.github.daniel_g_carrasco">
+    <name>Daniel Grasso</name>
+  </developer>
+
+  <description>
+    <p>
+      P7M Extractor unwraps CAdES (.p7m) digitally signed files and saves the
+      original document, byte for byte, next to the signed one. The format is
+      used across Italy for signed contracts, drawings, PEC attachments and
+      electronic invoices.
+    </p>
+    <p xml:lang="it">
+      P7M Extractor apre i file firmati digitalmente in formato CAdES (.p7m)
+      e salva il documento originale, byte per byte, accanto al file firmato.
+      Il formato è usato in Italia per contratti, disegni, allegati PEC e
+      fatture elettroniche.
+    </p>
+    <ul>
+      <li>Drag and drop files or whole folders (scanned recursively)</li>
+      <li xml:lang="it">Trascina file o intere cartelle (scansione ricorsiva)</li>
+      <li>Batch extraction with live results</li>
+      <li xml:lang="it">Estrazione in serie con risultati in tempo reale</li>
+      <li>Nested signatures unwrapped in a single pass</li>
+      <li xml:lang="it">Firme annidate risolte in un solo passaggio</li>
+      <li>Binary, base64 and PEM containers, BER streaming included</li>
+      <li xml:lang="it">Contenitori binari, base64 e PEM, incluso lo streaming BER</li>
+    </ul>
+    <p>
+      The tool extracts the signed content; it does not validate certificates
+      or the legal value of the signature.
+    </p>
+    <p xml:lang="it">
+      Lo strumento estrae il contenuto firmato; non verifica i certificati né
+      il valore legale della firma.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.daniel_g_carrasco.p7m_extractor.desktop</launchable>
+  <provides>
+    <binary>p7m-extractor</binary>
+    <mediatype>application/pkcs7-mime</mediatype>
+  </provides>
+
+  <url type="homepage">https://p7m.neistar.com</url>
+  <url type="bugtracker">https://github.com/daniel-g-carrasco/p7m-extractor/issues</url>
+  <url type="vcs-browser">https://github.com/daniel-g-carrasco/p7m-extractor</url>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#99c1f1</color>
+    <color type="primary" scheme_preference="dark">#1a5fb4</color>
+  </branding>
+
+  <content_rating type="oars-1.1"/>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">640</display_length>
+  </requires>
+
+  <!-- Flathub requires at least one screenshot reachable at a tagged URL:
+       add data/screenshots/main-window.png before tagging the release. -->
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main window with extracted files</caption>
+      <caption xml:lang="it">Finestra principale con i file estratti</caption>
+      <image>https://raw.githubusercontent.com/daniel-g-carrasco/p7m-extractor/v1.2.0/data/screenshots/main-window.png</image>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="1.2.0" date="2026-09-08">
+      <description>
+        <p>Single window for every file opened, start-up feedback, update check
+           and Explorer context menu on Windows, first Flatpak release.</p>
+        <p xml:lang="it">Finestra unica per tutti i file aperti, feedback all'avvio,
+           controllo aggiornamenti e menu contestuale di Esplora file su Windows,
+           prima versione Flatpak.</p>
+      </description>
+    </release>
+    <release version="1.1.1" date="2026-07-23"/>
+    <release version="1.1.0" date="2026-07-23"/>
+    <release version="1.0.0" date="2026-07-23"/>
+  </releases>
+</component>

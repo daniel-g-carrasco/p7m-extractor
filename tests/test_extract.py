@@ -110,8 +110,11 @@ def main() -> int:
         assert dest.read_bytes() == PAYLOAD
 
         expect_raises(FileExistsError, px.extract_file, f)
-        dest, _ = px.extract_file(f, overwrite=True)
+        seen = []
+        dest, _ = px.extract_file(f, overwrite=True, progress=seen.append)
         assert dest.read_bytes() == PAYLOAD
+        # progress climbs monotonically from the read phase to 1.0
+        assert seen == sorted(seen) and seen[-1] == 1.0 and 0.0 < seen[0] <= 0.5
 
         # folder scan finds .p7m case-insensitively, recursively
         (td / "sub").mkdir()
@@ -119,6 +122,69 @@ def main() -> int:
         upper.write_bytes(p7m_definite(b"<xml/>"))
         found = px.iter_p7m([td])
         assert upper in found and f in found and nested in found
+
+    # --- update check helpers (no network) ---------------------------------
+    assert px.parse_version("v1.10.2") == (1, 10, 2)
+    assert px.parse_version("2") == (2,)
+    assert px.is_newer("1.2.1", "1.2.0") and not px.is_newer("1.2.0", "1.2.0")
+    assert px.is_newer("v2", "1.9.9") and not px.is_newer("1.2", "1.2.0")
+    assets = [{"name": "p7m-extractor-v1.3.0-windows-x64-portable.zip"},
+              {"name": "p7m-extractor-setup-v1.3.0-windows-x64.exe"},
+              {"name": "p7m-extractor-v1.3.0-linux-x64-portable.tar.gz"}]
+    assert px.pick_asset(assets, installed=True)["name"].endswith(".exe")
+    assert px.pick_asset(assets, installed=False)["name"].endswith(".zip")
+    assert px.pick_asset([], installed=True) is None
+
+    # --- preferences round-trip ----------------------------------------------
+    with tempfile.TemporaryDirectory() as td:
+        ini = Path(td) / "cfg" / "settings.ini"
+        s = px.Settings(ini)
+        assert s.get_bool("ask_default_app") and s.get("last_update_check") == ""
+        s.set("ask_default_app", False)
+        s.set("last_update_check", "2026-09-08")
+        again = px.Settings(ini)
+        assert not again.get_bool("ask_default_app")
+        assert again.get("last_update_check") == "2026-09-08"
+        assert again.get_bool("check_updates")  # untouched default survives
+
+    # --- command line as re-parsed by the primary GUI instance ---------------
+    ns, unknown = px.build_parser().parse_known_args(["--gui", "a.p7m", "--future-flag"])
+    assert ns.gui and ns.paths == ["a.p7m"] and unknown == ["--future-flag"]
+
+    # --- translations: po -> mo compiler and gettext plumbing ----------------
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+    import compile_po  # noqa: E402
+    root = Path(compile_po.ROOT)
+    with tempfile.TemporaryDirectory() as td:
+        written = compile_po.compile_all(root / "po", Path(td))
+        assert [lang for lang, _count, _out in written] == ["it"]
+        import gettext
+        it = gettext.translation(px.TEXTDOMAIN, td, languages=["it"])
+        assert it.gettext("Queued") == "In coda"
+        assert it.gettext("Extracting… {percent}%") == "Estrazione in corso… {percent}%"
+        assert it.gettext("not a translated string") == "not a translated string"
+    # every msgid in the catalogue must exist in the source (adjacent string
+    # literals split over lines are joined first)
+    import re
+    source = re.sub(r'"\s*\n\s*"', "", (root / "p7m_extractor.py").read_text(encoding="utf-8"))
+    entries = compile_po.parse_po(root / "po" / "it.po")
+    missing = [m for m in entries if m and m not in source]
+    assert not missing, f"msgids not found in the source: {missing[:5]}"
+    assert px.detect_language() in px.LANGUAGES
+
+    # --- icons: gdk-pixbuf must be able to sniff them ------------------------
+    # It only looks for the <svg> element in the first 256 bytes; past that the
+    # file is "not a valid icon" and `flatpak build-export` fails. A long
+    # leading comment is enough to trigger it, so guard the offset here (pure
+    # stdlib: the CI test job has no GdkPixbuf).
+    icons = sorted((root / "data" / "icons").rglob("*.svg"))
+    assert icons, "no icon SVGs found"
+    for icon in icons:
+        head = icon.read_bytes()
+        offset = head.find(b"<svg")
+        assert 0 <= offset <= 256, (
+            f"{icon.name}: <svg> starts at byte {offset}; gdk-pixbuf only sniffs "
+            "the first 256 bytes, so flatpak-builder would reject this icon")
 
     print("all tests passed")
     return 0
