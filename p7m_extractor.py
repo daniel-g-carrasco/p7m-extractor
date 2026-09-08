@@ -955,11 +955,18 @@ def run_gui(argv) -> int:
             section = Gio.Menu()
             section.append(f"Informazioni su {APP_NAME}", "app.about")
             menu.append_section(None, section)
-            menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
-                                      primary=True, tooltip_text="Menu principale")
-            header.pack_end(menu_btn)
+            self.menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
+                                           primary=True, tooltip_text="Menu principale (F10)")
+            header.pack_end(self.menu_btn)
             self.spinner = Gtk.Spinner(tooltip_text="Estrazione in corso…")
             header.pack_end(self.spinner)
+            if is_win:  # Windows habit: a tap on Alt opens the main menu (F10 in GTK)
+                self._alt_solo = False
+                keys = Gtk.EventControllerKey()
+                keys.connect("key-pressed", self._on_key_pressed)
+                keys.connect("key-released", self._on_key_released)
+                self.add_controller(keys)
+                self.connect("notify::is-active", lambda *_: setattr(self, "_alt_solo", False))
 
             root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             if not use_csd:
@@ -1127,6 +1134,16 @@ def run_gui(argv) -> int:
             return False
 
         # --- signal handlers ----------------------------------------------
+        def _on_key_pressed(self, _ctl, keyval, _code, _state):
+            # remember whether Alt is being pressed on its own
+            self._alt_solo = keyval in (Gdk.KEY_Alt_L, Gdk.KEY_Alt_R)
+            return False
+
+        def _on_key_released(self, _ctl, keyval, _code, _state):
+            if keyval in (Gdk.KEY_Alt_L, Gdk.KEY_Alt_R) and self._alt_solo:
+                self._alt_solo = False
+                self.menu_btn.popup()
+
         def on_overwrite_toggled(self, check):
             self._overwrite = check.get_active()
 

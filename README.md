@@ -92,7 +92,10 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 ### Windows integration
 
 - **Double-click** a `.p7m` to extract it on the spot (file association).
-  A splash screen appears immediately, before GTK finishes loading.
+  A splash screen appears immediately, before GTK finishes loading, in the
+  light or dark GTK palette depending on the Windows "Apps mode" setting.
+- The main menu opens with F10 (GTK convention) or a tap on Alt (Windows
+  habit).
 - **Context menu**: right-click one or more `.p7m` files →
   *Estrai il contenuto con P7M Extractor*. On Windows 11 the entry lives
   under *Mostra altre opzioni* (Shift+F10), like every classic shell verb.
