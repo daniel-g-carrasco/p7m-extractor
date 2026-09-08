@@ -43,9 +43,9 @@ needed there either.
 
 ## Run from source
 
-Only Python ≥ 3.9, PyGObject/GTK 4 and libadwaita are needed — all packaged
-on every distribution. libadwaita is optional: without it the GUI falls back to
-plain GTK 4.
+Only Python ≥ 3.9, PyGObject/GTK 4 and libadwaita 1.5 or newer are needed,
+all packaged on every distribution. libadwaita is optional: without it the GUI
+falls back to plain GTK 4.
 
 ```bash
 # Debian/Ubuntu          # Fedora                          # Arch

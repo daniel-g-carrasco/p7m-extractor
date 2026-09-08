@@ -823,20 +823,32 @@ def build_parser() -> argparse.ArgumentParser:
 # GTK 4 GUI
 # ---------------------------------------------------------------------------
 
+# Plain GTK 4 (Windows, or Linux without libadwaita): GTK's own named colours.
 _CSS = b"""
 .dropzone {
     border: 2px dashed alpha(currentColor, 0.25);
     border-radius: 12px;
 }
 .dropzone.hover {
-    border-color: alpha(currentColor, 0.65);
-    background: alpha(currentColor, 0.06);
+    border-color: @theme_selected_bg_color;
+    background: alpha(@theme_selected_bg_color, 0.08);
 }
-/* p7m-banner, not banner: libadwaita already owns the .banner class */
 .p7m-banner {
-    background: alpha(currentColor, 0.10);
+    background: alpha(@theme_selected_bg_color, 0.14);
     border-radius: 8px;
     padding: 6px 6px 6px 12px;
+}
+"""
+
+# libadwaita: the accent colour it exports; messages are toasts, no banner.
+_CSS_ADW = b"""
+.dropzone {
+    border: 2px dashed alpha(currentColor, 0.25);
+    border-radius: 12px;
+}
+.dropzone.hover {
+    border-color: @accent_bg_color;
+    background: alpha(@accent_bg_color, 0.08);
 }
 """
 
@@ -883,8 +895,12 @@ def run_gui(argv, settings: Settings) -> int:
         try:
             gi.require_version("Adw", "1")
             from gi.repository import Adw
+            # AdwDialog (About, Preferences) needs 1.5, AdwToolbarView 1.4:
+            # older libadwaita takes the plain GTK 4 path below instead.
+            if (Adw.MAJOR_VERSION, Adw.MINOR_VERSION) < (1, 5):
+                Adw = None
         except (ImportError, ValueError):
-            Adw = None  # plain GTK 4 fallback, see the branches below
+            Adw = None
     use_adw = Adw is not None
     _mark("gtk-imported")
 
@@ -1345,7 +1361,7 @@ def run_gui(argv, settings: Settings) -> int:
             if use_adw:
                 # A toast: transient on its own, persistent when it carries an
                 # action. AdwToast has no signal, hence the app action.
-                toast = Adw.Toast(title=text)
+                toast = Adw.Toast(title=text, use_markup=False)
                 if button_label:
                     toast.set_button_label(button_label)
                     toast.set_action_name("app.banner-action")
@@ -2017,13 +2033,14 @@ def run_gui(argv, settings: Settings) -> int:
             Gtk.Window.set_default_icon_name(APP_ID)
 
             css = Gtk.CssProvider()
+            css_data = _CSS_ADW if use_adw else _CSS
             try:  # GTK >= 4.12
-                css.load_from_string(_CSS.decode())
+                css.load_from_string(css_data.decode())
             except AttributeError:  # older GTK 4, PyGObject signature varies
                 try:
-                    css.load_from_data(_CSS)
+                    css.load_from_data(css_data)
                 except TypeError:
-                    css.load_from_data(_CSS, len(_CSS))
+                    css.load_from_data(css_data, len(css_data))
             Gtk.StyleContext.add_provider_for_display(
                 display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             theme = ThemeManager()
