@@ -1216,6 +1216,9 @@ def run_gui(argv, settings: Settings) -> int:
             if is_win:  # Windows habit: a tap on Alt opens the main menu (F10 in GTK)
                 self._alt_solo = False
                 keys = Gtk.EventControllerKey()
+                # capture phase: an open popover menu handles Alt itself
+                # (mnemonics) and would otherwise swallow the release
+                keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
                 keys.connect("key-pressed", self._on_key_pressed)
                 keys.connect("key-released", self._on_key_released)
                 self.add_controller(keys)
