@@ -121,21 +121,24 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install GTK 4 and PyGObject
+      - name: Install GTK 4, libadwaita and PyGObject
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
-            libgtk-4-1 libgtk-4-bin python3-venv binutils
+            gir1.2-adw-1 libadwaita-1-0 libgtk-4-1 libgtk-4-bin python3-venv \
+            binutils
       - name: Build with PyInstaller
         run: |
           python3 tools/compile_po.py
           python3 -m venv --system-site-packages .venv
           .venv/bin/pip install pyinstaller
           .venv/bin/pyinstaller --noconfirm p7m-extractor.spec
-      - name: Verify GTK 4 and the translations are in the bundle
+      - name: Verify GTK 4, libadwaita and the translations are in the bundle
         run: |
           test -f dist/p7m-extractor/_internal/gi_typelibs/Gtk-4.0.typelib
+          test -f dist/p7m-extractor/_internal/gi_typelibs/Adw-1.typelib
           ls dist/p7m-extractor/_internal/libgtk-4*.so*
+          ls dist/p7m-extractor/_internal/libadwaita-1*.so*
           test -f dist/p7m-extractor/_internal/share/locale/it/LC_MESSAGES/p7m-extractor.mo
       - name: Slim the bundle (locales and icon variants the app never loads)
         run: |

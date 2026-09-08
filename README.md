@@ -20,9 +20,9 @@ PEC attachments and electronic invoices (Fattura Elettronica). It wraps the
 original document (PDF, XML, …) in a PKCS#7/CMS signature envelope; this tool
 unwraps it.
 
-Drag & drop GUI (GTK 4) + CLI, installable or portable on **Windows**,
-Flatpak or portable on **Linux**, zero runtime dependencies: the PKCS#7/CMS
-envelope is parsed directly by a small pure-Python BER parser. The extracted
+Drag & drop GUI (GTK 4 / libadwaita) + CLI, installable or portable on
+**Windows**, Flatpak or portable on **Linux**. No third-party Python packages:
+the PKCS#7/CMS envelope is parsed directly by a small pure-Python BER parser. The extracted
 file is **byte-for-byte identical** to what was signed.
 
 ## Download
@@ -43,14 +43,15 @@ needed there either.
 
 ## Run from source
 
-Only Python ≥ 3.9 and PyGObject/GTK 4 are needed — both usually one package
-away on Linux:
+Only Python ≥ 3.9, PyGObject/GTK 4 and libadwaita are needed — all packaged
+on every distribution. libadwaita is optional: without it the GUI falls back to
+plain GTK 4.
 
 ```bash
-# Debian/Ubuntu          # Fedora                        # Arch
-sudo apt install python3-gi gir1.2-gtk-4.0
-                         sudo dnf install python3-gobject gtk4
-                                                         sudo pacman -S python-gobject gtk4
+# Debian/Ubuntu          # Fedora                          # Arch
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+                         sudo dnf install python3-gobject gtk4 libadwaita
+                                                           sudo pacman -S python-gobject gtk4 libadwaita
 python3 p7m_extractor.py
 ```
 
@@ -120,6 +121,9 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 
 ### Linux
 
+- A libadwaita application: current GNOME look, `AdwStyleManager` follows the
+  system light/dark preference on its own, `AdwAboutDialog` and
+  `AdwPreferencesDialog` for the secondary windows.
 - Registers as a handler for `application/pkcs7-mime` through its desktop
   entry, so it shows up in *Open With* and can be set as default from the
   file manager — no in-app prompt, as the GNOME HIG prescribes.

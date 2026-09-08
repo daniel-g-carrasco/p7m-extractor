@@ -829,11 +829,12 @@ _CSS = b"""
     border-radius: 12px;
 }
 .dropzone.hover {
-    border-color: @theme_selected_bg_color;
-    background: alpha(@theme_selected_bg_color, 0.08);
+    border-color: alpha(currentColor, 0.65);
+    background: alpha(currentColor, 0.06);
 }
-.banner {
-    background: alpha(@theme_selected_bg_color, 0.14);
+/* p7m-banner, not banner: libadwaita already owns the .banner class */
+.p7m-banner {
+    background: alpha(currentColor, 0.10);
     border-radius: 8px;
     padding: 6px 6px 6px 12px;
 }
@@ -861,9 +862,10 @@ def run_gui(argv, settings: Settings) -> int:
     except (ImportError, ValueError):
         print(
             _("GTK 4 / PyGObject not available. Install:") + "\n"
-            "  Debian/Ubuntu:  sudo apt install python3-gi gir1.2-gtk-4.0\n"
-            "  Fedora:         sudo dnf install python3-gobject gtk4\n"
-            "  Arch:           sudo pacman -S python-gobject gtk4\n"
+            "  Debian/Ubuntu:  sudo apt install python3-gi gir1.2-gtk-4.0 "
+            "gir1.2-adw-1\n"
+            "  Fedora:         sudo dnf install python3-gobject gtk4 libadwaita\n"
+            "  Arch:           sudo pacman -S python-gobject gtk4 libadwaita\n"
             "  Windows(MSYS2): pacman -S mingw-w64-x86_64-gtk4 "
             "mingw-w64-x86_64-python-gobject\n"
             + _("or download the portable build from the GitHub Releases.") + "\n"
@@ -871,6 +873,19 @@ def run_gui(argv, settings: Settings) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # libadwaita is the GNOME platform library: it supplies the current HIG
+    # widgets and follows the system light/dark preference by itself (GTK
+    # deprecated gtk-application-prefer-dark-theme in 4.20). Linux only: the
+    # Windows build stays on plain GTK, which its native decorations need.
+    Adw = None
+    if not is_win:
+        try:
+            gi.require_version("Adw", "1")
+            from gi.repository import Adw
+        except (ImportError, ValueError):
+            Adw = None  # plain GTK 4 fallback, see the branches below
+    use_adw = Adw is not None
     _mark("gtk-imported")
 
     import queue
@@ -968,8 +983,9 @@ def run_gui(argv, settings: Settings) -> int:
 
     class ThemeManager:
         """Light/dark colour scheme: explicit, or automatic following the
-        system (Windows personalization key / freedesktop settings portal).
-        Plain GTK 4 does not track the system preference by itself."""
+        system. With libadwaita that is AdwStyleManager's job; on plain GTK 4
+        (Windows, or Linux without libadwaita) the preference is read by hand
+        from the personalization key / the freedesktop settings portal."""
 
         def __init__(self):
             self.dark = False
@@ -979,6 +995,16 @@ def run_gui(argv, settings: Settings) -> int:
 
         def apply(self):
             mode = settings.get("color_scheme")
+            if use_adw:
+                # libadwaita tracks the system preference itself, settings
+                # portal included: DEFAULT means "follow the system".
+                manager = Adw.StyleManager.get_default()
+                manager.set_color_scheme({
+                    "dark": Adw.ColorScheme.FORCE_DARK,
+                    "light": Adw.ColorScheme.FORCE_LIGHT,
+                }.get(mode, Adw.ColorScheme.DEFAULT))
+                self.dark = manager.get_dark()
+                return
             if mode == "dark":
                 dark = True
             elif mode == "light":
@@ -1126,7 +1152,9 @@ def run_gui(argv, settings: Settings) -> int:
 
     # --- main window ------------------------------------------------------
 
-    class Window(Gtk.ApplicationWindow):
+    WindowBase = Adw.ApplicationWindow if use_adw else Gtk.ApplicationWindow
+
+    class Window(WindowBase):
         def __init__(self, app):
             super().__init__(
                 application=app, title=APP_NAME,
@@ -1144,8 +1172,10 @@ def run_gui(argv, settings: Settings) -> int:
             self._about = None
             self.connect("map", lambda _w: _mark("window-mapped"))
 
-            header = Gtk.HeaderBar()
-            if use_csd:
+            header = Adw.HeaderBar() if use_adw else Gtk.HeaderBar()
+            if use_adw:
+                pass  # placed by the AdwToolbarView below
+            elif use_csd:
                 self.set_titlebar(header)
             else:  # native title bar: the header bar becomes a plain toolbar
                 header.set_show_title_buttons(False)
@@ -1176,52 +1206,74 @@ def run_gui(argv, settings: Settings) -> int:
                 self.connect("notify::is-active",
                              lambda _w, _p: setattr(self, "_alt_solo", False))
 
-            root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            if not use_csd:
-                root.append(header)
             content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             set_margins(content, 16)
-            root.append(content)
-            self.set_child(root)
+            if use_adw:
+                # HIG layout: the toolbar view carries the header bar, the page
+                # lives in a toast overlay so messages arrive as toasts.
+                self.toasts = Adw.ToastOverlay(child=content)
+                view = Adw.ToolbarView()
+                view.add_top_bar(header)
+                view.set_content(self.toasts)
+                self.set_content(view)
+            else:
+                root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+                if not use_csd:
+                    root.append(header)
+                root.append(content)
+                self.set_child(root)
+                # --- in-app notification banner -----------------------------
+                self.banner = Gtk.Revealer(
+                    transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
+                bbox = Gtk.Box(spacing=12)
+                bbox.add_css_class("p7m-banner")
+                self.banner_label = Gtk.Label(hexpand=True, xalign=0.0, wrap=True)
+                self.banner_button = Gtk.Button(valign=Gtk.Align.CENTER)
+                self.banner_button.connect("clicked", self._on_banner_button)
+                close_btn = Gtk.Button(icon_name="window-close-symbolic",
+                                       valign=Gtk.Align.CENTER,
+                                       tooltip_text=_("Close"))
+                close_btn.add_css_class("flat")
+                close_btn.connect(
+                    "clicked", lambda _b: self.banner.set_reveal_child(False))
+                for w in (self.banner_label, self.banner_button, close_btn):
+                    bbox.append(w)
+                self.banner.set_child(bbox)
+                content.append(self.banner)
             theme.watch_window(self)
 
-            # --- in-app notification banner ---------------------------------
-            self.banner = Gtk.Revealer(
-                transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
-            bbox = Gtk.Box(spacing=12)
-            bbox.add_css_class("banner")
-            self.banner_label = Gtk.Label(hexpand=True, xalign=0.0, wrap=True)
-            self.banner_button = Gtk.Button(valign=Gtk.Align.CENTER)
-            self.banner_button.connect("clicked", self._on_banner_button)
-            close_btn = Gtk.Button(icon_name="window-close-symbolic",
-                                   valign=Gtk.Align.CENTER, tooltip_text=_("Close"))
-            close_btn.add_css_class("flat")
-            close_btn.connect("clicked", lambda _b: self.banner.set_reveal_child(False))
-            for w in (self.banner_label, self.banner_button, close_btn):
-                bbox.append(w)
-            self.banner.set_child(bbox)
-            content.append(self.banner)
-
             # --- drop zone -------------------------------------------------
-            self.dropzone = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-            self.dropzone.add_css_class("dropzone")
-            set_margins(self.dropzone, top=4, bottom=4)
-            icon = Gtk.Image.new_from_icon_name("document-open-symbolic")
-            icon.set_pixel_size(48)
-            icon.set_margin_top(20)
-            title = Gtk.Label(label=_("Drop .p7m files or folders here"))
-            title.add_css_class("title-4")
-            hint = Gtk.Label(label=_("The original document is extracted next to the signed file"))
-            hint.add_css_class("dim-label")
             btns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                            halign=Gtk.Align.CENTER)
-            btns.set_margin_bottom(20)
             b_files = Gtk.Button(label=_("Choose files…"), action_name="app.open-files")
             b_folder = Gtk.Button(label=_("Choose folder…"), action_name="app.open-folder")
             btns.append(b_files)
             btns.append(b_folder)
-            for w in (icon, title, hint, btns):
-                self.dropzone.append(w)
+            if use_adw:
+                # AdwStatusPage is the HIG widget for this; the "compact" style
+                # keeps it from taking the whole window.
+                self.dropzone = Adw.StatusPage(
+                    icon_name="document-open-symbolic",
+                    title=_("Drop .p7m files or folders here"),
+                    description=_("The original document is extracted next to "
+                                  "the signed file"),
+                    child=btns, vexpand=False)
+                self.dropzone.add_css_class("compact")
+            else:
+                self.dropzone = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                                        spacing=8)
+                icon = Gtk.Image.new_from_icon_name("document-open-symbolic")
+                icon.set_pixel_size(48)
+                icon.set_margin_top(20)
+                title = Gtk.Label(label=_("Drop .p7m files or folders here"))
+                title.add_css_class("title-4")
+                hint = Gtk.Label(label=_("The original document is extracted next to the signed file"))
+                hint.add_css_class("dim-label")
+                btns.set_margin_bottom(20)
+                for w in (icon, title, hint, btns):
+                    self.dropzone.append(w)
+            self.dropzone.add_css_class("dropzone")
+            set_margins(self.dropzone, top=4, bottom=4)
             content.append(self.dropzone)
 
             # --- results list ---------------------------------------------
@@ -1233,8 +1285,14 @@ def run_gui(argv, settings: Settings) -> int:
             self.listbox.set_placeholder(placeholder)
             scrolled = Gtk.ScrolledWindow(vexpand=True, child=self.listbox)
             scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-            frame = Gtk.Frame(child=scrolled)
-            content.append(frame)
+            if use_adw:  # boxed-list draws the HIG card around the rows
+                self.listbox.add_css_class("boxed-list")
+                # ...which has to hug them: filling the scrolled window would
+                # stretch the card over the empty space below the last row.
+                self.listbox.set_valign(Gtk.Align.START)
+                content.append(scrolled)
+            else:
+                content.append(Gtk.Frame(child=scrolled))
 
             # --- bottom bar ------------------------------------------------
             bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -1283,18 +1341,45 @@ def run_gui(argv, settings: Settings) -> int:
             return False  # one-shot GLib.idle_add
 
         def show_banner(self, text, button_label=None, callback=None):
-            self.banner_label.set_label(text)
             self._banner_cb = callback
+            if use_adw:
+                # A toast: transient on its own, persistent when it carries an
+                # action. AdwToast has no signal, hence the app action.
+                toast = Adw.Toast(title=text)
+                if button_label:
+                    toast.set_button_label(button_label)
+                    toast.set_action_name("app.banner-action")
+                    toast.set_timeout(0)
+                self.toasts.add_toast(toast)
+                return
+            self.banner_label.set_label(text)
             self.banner_button.set_label(button_label or "")
             self.banner_button.set_visible(bool(button_label))
             self.banner.set_reveal_child(True)
 
-        def _on_banner_button(self, _btn):
-            self.banner.set_reveal_child(False)
+        def run_banner_action(self):
             if self._banner_cb:
                 self._banner_cb()
 
+        def _on_banner_button(self, _btn):
+            self.banner.set_reveal_child(False)
+            self.run_banner_action()
+
         def show_about(self):
+            if use_adw:  # AdwAboutDialog: the current GNOME about window
+                Adw.AboutDialog(
+                    application_name=APP_NAME, application_icon=APP_ID,
+                    version=__version__,
+                    comments=_("Extracts the original document from digitally "
+                               "signed files (.p7m, CAdES)."),
+                    website=f"https://github.com/{GITHUB_REPO}",
+                    issue_url=f"https://github.com/{GITHUB_REPO}/issues",
+                    license_type=Gtk.License.MIT_X11,
+                    copyright="© 2026 Daniel Grasso",
+                    developer_name="Daniel Grasso",
+                    developers=["Daniel Grasso"],
+                ).present(self)
+                return
             if self._about is None:  # built once, hidden on close
                 self._about = Gtk.AboutDialog(
                     transient_for=self, modal=True, hide_on_close=True,
@@ -1863,9 +1948,49 @@ def run_gui(argv, settings: Settings) -> int:
             except OSError as e:
                 self._refresh(_("Removal failed: {error}").format(error=e))
 
+    def adw_preferences(parent):
+        """Preferences as an AdwPreferencesDialog: HIG boxed list, combo rows.
+        The plain-GTK PreferencesWindow above serves Windows."""
+        schemes = (("auto", _("Automatic (follow the system)")),
+                   ("light", _("Light")), ("dark", _("Dark")))
+        languages = (("auto", _("Automatic (system language)")),
+                     ("it", "Italiano"), ("en", "English"))
+
+        def on_scheme(value):
+            settings.set("color_scheme", value)
+            theme.apply()
+
+        def on_language(value):
+            settings.set("language", value)
+            parent.show_banner(_("The new language will be used at the next start."))
+
+        def combo(title, subtitle, options, key, callback):
+            keys = [k for k, _label in options]
+            row = Adw.ComboRow(
+                title=title, subtitle=subtitle,
+                model=Gtk.StringList.new([label for _k, label in options]))
+            current = settings.get(key)
+            row.set_selected(keys.index(current) if current in keys else 0)
+            row.connect("notify::selected",
+                        lambda r, _p: callback(keys[r.get_selected()]))
+            return row
+
+        group = Adw.PreferencesGroup(title=_("Appearance"))
+        group.add(combo(_("Theme"), _("“Automatic” follows the system settings"),
+                        schemes, "color_scheme", on_scheme))
+        group.add(combo(_("Language"), _("Takes effect at the next start"),
+                        languages, "language", on_language))
+        page = Adw.PreferencesPage()
+        page.add(group)
+        dialog = Adw.PreferencesDialog(title=_("Preferences"))
+        dialog.add(page)
+        dialog.present(parent)
+
     # --- application --------------------------------------------------------
 
-    class App(Gtk.Application):
+    AppBase = Adw.Application if use_adw else Gtk.Application
+
+    class App(AppBase):
         """Single-instance application: a second launch (double-click on a
         .p7m, context-menu entry, several files selected at once) forwards its
         command line to the running window instead of opening another one."""
@@ -1878,7 +2003,7 @@ def run_gui(argv, settings: Settings) -> int:
 
         def do_startup(self):
             nonlocal theme
-            Gtk.Application.do_startup(self)
+            AppBase.do_startup(self)
             _mark("startup")
             display = Gdk.Display.get_default()
             bundle = getattr(sys, "_MEIPASS", None)
@@ -1909,9 +2034,12 @@ def run_gui(argv, settings: Settings) -> int:
                          ["<Control>o"])
             self._action("open-folder", lambda _a, _p: self._win().on_pick_folder(),
                          ["<Control><Shift>o"])
-            self._action("preferences",
-                         lambda _a, _p: PreferencesWindow(self._win()).present(),
-                         ["<Control>comma"])
+            self._action("preferences", lambda _a, _p: (
+                adw_preferences(self._win()) if use_adw
+                else PreferencesWindow(self._win()).present()),
+                ["<Control>comma"])
+            self._action("banner-action",
+                         lambda _a, _p: self._win().run_banner_action())
             if is_win:
                 self._action("check-updates",
                              lambda _a, _p: self._win().check_updates(manual=True))

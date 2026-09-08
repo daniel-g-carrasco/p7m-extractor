@@ -54,18 +54,17 @@ if WIN:
     else:
         print('WARNING: no CA bundle found: the update check may fail on TLS')
 
+# Introspection modules the gi hook must collect. The Linux GUI is a
+# libadwaita app; the Windows build stays on plain GTK (see p7m_extractor.py).
+GI_VERSIONS = {'Gtk': '4.0', 'Gdk': '4.0'}
+if not WIN:
+    GI_VERSIONS['Adw'] = '1'
+
 a = Analysis(
     ['p7m_extractor.py'],
     binaries=binaries,
     datas=datas,
-    hooksconfig={
-        'gi': {
-            'module-versions': {
-                'Gtk': '4.0',
-                'Gdk': '4.0',
-            },
-        },
-    },
+    hooksconfig={'gi': {'module-versions': GI_VERSIONS}},
 )
 
 pyz = PYZ(a.pure)
