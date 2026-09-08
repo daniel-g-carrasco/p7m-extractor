@@ -1215,13 +1215,16 @@ def run_gui(argv, settings: Settings) -> int:
             header.pack_end(self.spinner)
             if is_win:  # Windows habit: a tap on Alt opens the main menu (F10 in GTK)
                 self._alt_solo = False
-                keys = Gtk.EventControllerKey()
-                # capture phase: an open popover menu handles Alt itself
-                # (mnemonics) and would otherwise swallow the release
-                keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-                keys.connect("key-pressed", self._on_key_pressed)
-                keys.connect("key-released", self._on_key_released)
-                self.add_controller(keys)
+                # Key events only propagate inside the surface that receives
+                # them: while the menu is open that is the popover, not the
+                # window, so both need a controller (capture phase, ahead of
+                # GTK's own mnemonic handling of Alt).
+                for widget in (self, self.menu_btn.get_popover()):
+                    keys = Gtk.EventControllerKey()
+                    keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+                    keys.connect("key-pressed", self._on_key_pressed)
+                    keys.connect("key-released", self._on_key_released)
+                    widget.add_controller(keys)
                 self.connect("notify::is-active",
                              lambda _w, _p: setattr(self, "_alt_solo", False))
 
