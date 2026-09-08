@@ -816,6 +816,7 @@ def run_gui(argv) -> int:
             self._pending = 0         # batches queued or running
             self._native = None       # keep FileChooserNative alive
             self._banner_cb = None
+            self._about = None
 
             header = Gtk.HeaderBar()
             self.set_titlebar(header)
@@ -950,19 +951,20 @@ def run_gui(argv) -> int:
                 self._banner_cb()
 
         def show_about(self):
-            about = Gtk.AboutDialog(
-                transient_for=self, modal=True,
-                program_name=APP_NAME, version=__version__,
-                comments="Estrae il documento originale dai file firmati "
-                         "digitalmente (.p7m, CAdES).",
-                website=f"https://github.com/{GITHUB_REPO}",
-                website_label="Progetto su GitHub",
-                license_type=Gtk.License.MIT_X11,
-                copyright="© 2026 Daniel Grasso",
-                authors=["Daniel Grasso"],
-                logo_icon_name=APP_ID,
-            )
-            about.present()
+            if self._about is None:  # built once, hidden on close
+                self._about = Gtk.AboutDialog(
+                    transient_for=self, modal=True, hide_on_close=True,
+                    program_name=APP_NAME, version=__version__,
+                    comments="Estrae il documento originale dai file firmati "
+                             "digitalmente (.p7m, CAdES).",
+                    website=f"https://github.com/{GITHUB_REPO}",
+                    website_label="Progetto su GitHub",
+                    license_type=Gtk.License.MIT_X11,
+                    copyright="© 2026 Daniel Grasso",
+                    authors=["Daniel Grasso"],
+                    logo_icon_name=APP_ID,
+                )
+            self._about.present()
 
         # --- update check (Windows) -----------------------------------------
         def check_updates(self, manual):

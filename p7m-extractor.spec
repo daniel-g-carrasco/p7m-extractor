@@ -65,6 +65,8 @@ pyz = PYZ(a.pure)
 # Start-up splash (Windows only): drawn by the bootloader long before Python
 # and GTK are loaded, so a double-click on a .p7m gives immediate feedback.
 # The app closes it (pyi_splash.close()) as soon as its window is on screen.
+# The image is 1.5x (600x225): the process is DPI aware (see the manifest
+# below), so it is shown pixel for pixel, never scaled by Windows.
 splash = None
 if WIN:
     try:
@@ -72,7 +74,7 @@ if WIN:
             'assets/splash.png',
             binaries=a.binaries,
             datas=a.datas,
-            text_pos=(140, 122),
+            text_pos=(210, 183),
             text_size=10,
             text_color='#5e5c64',
             text_default='Avvio in corso…',
@@ -84,6 +86,10 @@ if WIN:
         print(f'WARNING: splash screen disabled: {e!r}')
         splash = None
 
+# Windows: embed our own manifest, which declares per-monitor DPI awareness
+# (crisp, stable splash on HiDPI screens) on top of PyInstaller's defaults.
+MANIFEST = os.path.join(SPECPATH, 'build-aux', 'windows', 'p7m-extractor.manifest') if WIN else None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -92,6 +98,7 @@ exe = EXE(
     name='p7m-extractor',
     console=False,
     icon=ICON,
+    manifest=MANIFEST,
 )
 
 coll = COLLECT(
