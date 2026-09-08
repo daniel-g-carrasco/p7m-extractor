@@ -1,0 +1,13 @@
+# Keeps the GitHub Actions used by the CI workflow current: one pull request
+# per outdated action, checked weekly. Nothing else in the project has
+# dependencies to track (pure Python, toolchains come from MSYS2 / apt / the
+# GNOME runtime at build time).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
