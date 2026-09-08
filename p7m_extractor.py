@@ -847,6 +847,10 @@ def run_gui(argv, settings: Settings) -> int:
     use_csd = not (is_win and settings.get_bool("native_decorations"))
     if not use_csd:
         os.environ["GTK_CSD"] = "0"
+    if is_win:
+        # The GL renderers spend ~1 s compiling shaders before the first
+        # frame on Windows; this UI needs none of their features.
+        os.environ.setdefault("GSK_RENDERER", "cairo")
     theme = None  # ThemeManager, created once GTK is up (App.do_startup)
 
     try:
