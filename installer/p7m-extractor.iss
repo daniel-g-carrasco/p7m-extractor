@@ -99,9 +99,11 @@ Root: HKA; Subkey: "Software\P7M Extractor\Capabilities\FileAssociations"; Value
 Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "P7M Extractor"; ValueData: "Software\P7M Extractor\Capabilities"; Flags: uninsdeletevalue
 
 [INI]
-; the language chosen for Setup becomes the app language (per-user installs;
-; when elevated, {localappdata} would be the administrator's profile)
-Filename: "{localappdata}\p7m-extractor\settings.ini"; Section: "general"; Key: "language"; String: "{code:AppLanguage}"; Check: not IsAdminInstallMode
+; the language chosen for Setup becomes the app language. {localappdata} is
+; the profile of the user running Setup (with UAC approval that is still the
+; same user; only elevation with another administrator's account would land
+; the setting in that other profile, which is harmless).
+Filename: "{localappdata}\p7m-extractor\settings.ini"; Section: "general"; Key: "language"; String: "{code:AppLanguage}"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{localappdata}\p7m-extractor"
