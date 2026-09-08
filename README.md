@@ -160,8 +160,8 @@ copying the embedded octets verbatim.
 ```bash
 flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
 flatpak-builder --user --install --force-clean build-dir \
-    build-aux/flatpak/io.github.daniel_g_carrasco.p7m_extractor.yaml
-flatpak run io.github.daniel_g_carrasco.p7m_extractor
+    build-aux/flatpak/io.github.daniel_g_carrasco.p7m-extractor.yaml
+flatpak run io.github.daniel_g_carrasco.p7m-extractor
 ```
 
 The manifest ([build-aux/flatpak/](build-aux/flatpak/)) installs the script,
@@ -170,7 +170,7 @@ the desktop entry, the AppStream metainfo and the icons from
 to releases. The app needs `--filesystem=host` because the extracted file is
 written next to the signed one, wherever that is.
 
-The app ID `io.github.daniel_g_carrasco.p7m_extractor` is derived from the
+The app ID `io.github.daniel_g_carrasco.p7m-extractor` is derived from the
 GitHub repository, so Flathub verifies ownership through the GitHub account
 and no domain is involved. Submitting needs, in addition: a screenshot at
 `data/screenshots/main-window.png` (referenced by the metainfo at the
@@ -187,8 +187,8 @@ output directory `site`).
 python tests/test_extract.py     # self-contained test suite, no deps
 python tools/compile_po.py       # compile po/*.po into locale/ (needed to see translations)
 python tools/make_icon.py        # regenerate assets/icon.*, data/icons PNGs, installer bitmaps (Pillow)
-desktop-file-validate data/io.github.daniel_g_carrasco.p7m_extractor.desktop
-appstreamcli validate --no-net data/io.github.daniel_g_carrasco.p7m_extractor.metainfo.xml
+desktop-file-validate data/io.github.daniel_g_carrasco.p7m-extractor.desktop
+appstreamcli validate --no-net data/io.github.daniel_g_carrasco.p7m-extractor.metainfo.xml
 ```
 
 Builds are produced by [CI](.github/workflows/build.yml) (PyInstaller;

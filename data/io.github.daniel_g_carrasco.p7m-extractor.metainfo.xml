@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- AppStream metadata: shown by GNOME Software / Flathub. -->
 <component type="desktop-application">
-  <id>io.github.daniel_g_carrasco.p7m_extractor</id>
+  <id>io.github.daniel_g_carrasco.p7m-extractor</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
@@ -46,7 +46,7 @@
     </p>
   </description>
 
-  <launchable type="desktop-id">io.github.daniel_g_carrasco.p7m_extractor.desktop</launchable>
+  <launchable type="desktop-id">io.github.daniel_g_carrasco.p7m-extractor.desktop</launchable>
   <provides>
     <binary>p7m-extractor</binary>
     <mediatype>application/pkcs7-mime</mediatype>
