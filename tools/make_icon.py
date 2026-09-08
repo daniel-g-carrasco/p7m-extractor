@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Generate assets/icon.ico and assets/icon.png (requires Pillow).
+"""Generate the raster application icons (requires Pillow):
+
+  assets/icon.ico, assets/icon.png            Windows exe / installer icon
+  data/icons/hicolor/<N>x<N>/apps/<APP_ID>.png icon-theme PNGs (64, 128, 256)
 
 Drawn at high resolution and downscaled, so every size stays crisp.
 Design: white document with a folded corner on a blue rounded tile,
 with a red wax-seal-and-ribbon badge (the digital-signature motif).
+The scalable version of the same design lives in
+data/icons/hicolor/scalable/apps/<APP_ID>.svg.
 """
 
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+
+ROOT = Path(__file__).resolve().parent.parent
+APP_ID = "com.danielgrasso.P7mExtractor"
 
 S = 1024  # master canvas, downscaled at the end
 
@@ -20,7 +28,8 @@ RED = (192, 28, 40, 255)         # seal
 RED_DARK = (140, 18, 28, 255)    # ribbon
 
 
-def main() -> None:
+def render_master() -> Image.Image:
+    """Return the icon as a 1024x1024 RGBA image."""
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
@@ -59,8 +68,13 @@ def main() -> None:
     # check mark inside the seal
     d.line([(cx - 62, cy + 4), (cx - 14, cy + 52), (cx + 66, cy - 46)],
            fill=WHITE, width=30, joint="curve")
+    return img
 
-    out = Path(__file__).resolve().parent.parent / "assets"
+
+def main() -> None:
+    img = render_master()
+
+    out = ROOT / "assets"
     out.mkdir(exist_ok=True)
     master = img.resize((256, 256), Image.LANCZOS)
     master.save(out / "icon.png")
@@ -70,6 +84,12 @@ def main() -> None:
                (64, 64), (128, 128), (256, 256)],
     )
     print(f"written: {out / 'icon.ico'} and icon.png")
+
+    for size in (64, 128, 256):
+        dest = ROOT / "data" / "icons" / "hicolor" / f"{size}x{size}" / "apps" / f"{APP_ID}.png"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        img.resize((size, size), Image.LANCZOS).save(dest)
+        print(f"written: {dest.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

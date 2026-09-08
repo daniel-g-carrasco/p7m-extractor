@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- P7M Extractor application icon (same design as tools/make_icon.py,
+     on the 128 px GNOME icon grid). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- blue tile -->
+  <rect x="8" y="8" width="112" height="112" rx="22.5" fill="#1a5fb4"/>
+  <!-- document sheet with folded top-right corner -->
+  <path d="M35 25H78L93 40V103H35Z" fill="#ffffff"/>
+  <path d="M78 25V40H93Z" fill="#103e78"/>
+  <!-- text lines -->
+  <g fill="#a0afc3">
+    <rect x="43.75" y="41.25" width="40.5" height="3.75" rx="1.875"/>
+    <rect x="43.75" y="50.25" width="33" height="3.75" rx="1.875"/>
+    <rect x="43.75" y="59.25" width="40.5" height="3.75" rx="1.875"/>
+    <rect x="43.75" y="68.25" width="33" height="3.75" rx="1.875"/>
+    <rect x="43.75" y="77.25" width="40.5" height="3.75" rx="1.875"/>
+  </g>
+  <!-- ribbon tails -->
+  <g fill="#8c121c">
+    <path d="M75 100L63.75 126.25L78.75 120L82.5 105Z"/>
+    <path d="M90 100L101.25 126.25L86.25 120L82.5 105Z"/>
+  </g>
+  <!-- wax seal with check mark -->
+  <circle cx="82.5" cy="95" r="18.75" fill="#c01c28"/>
+  <circle cx="82.5" cy="95" r="13.375" fill="none" stroke="#ffffff" stroke-width="2.25"/>
+  <path d="M74.75 95.5L80.75 101.5L90.75 89.25" fill="none" stroke="#ffffff"
+        stroke-width="3.75" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

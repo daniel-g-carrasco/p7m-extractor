@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=P7M Extractor
+Comment=Extract the original document from digitally signed .p7m files
+Comment[it]=Estrae il documento originale dai file firmati digitalmente .p7m
+Exec=p7m-extractor --gui %F
+Icon=com.danielgrasso.P7mExtractor
+Terminal=false
+Categories=Utility;Office;GTK;
+Keywords=p7m;CAdES;PKCS7;signature;PEC;invoice;
+Keywords[it]=p7m;CAdES;PKCS7;firma digitale;PEC;fattura elettronica;
+MimeType=application/pkcs7-mime;application/x-pkcs7-mime;
+StartupNotify=true

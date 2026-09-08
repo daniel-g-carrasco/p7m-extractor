@@ -120,6 +120,34 @@ def main() -> int:
         found = px.iter_p7m([td])
         assert upper in found and f in found and nested in found
 
+    # --- update check helpers (no network) ---------------------------------
+    assert px.parse_version("v1.10.2") == (1, 10, 2)
+    assert px.parse_version("2") == (2,)
+    assert px.is_newer("1.2.1", "1.2.0") and not px.is_newer("1.2.0", "1.2.0")
+    assert px.is_newer("v2", "1.9.9") and not px.is_newer("1.2", "1.2.0")
+    assets = [{"name": "p7m-extractor-v1.3.0-windows-x64-portable.zip"},
+              {"name": "p7m-extractor-setup-v1.3.0-windows-x64.exe"},
+              {"name": "p7m-extractor-v1.3.0-linux-x64-portable.tar.gz"}]
+    assert px.pick_asset(assets, installed=True)["name"].endswith(".exe")
+    assert px.pick_asset(assets, installed=False)["name"].endswith(".zip")
+    assert px.pick_asset([], installed=True) is None
+
+    # --- preferences round-trip ----------------------------------------------
+    with tempfile.TemporaryDirectory() as td:
+        ini = Path(td) / "cfg" / "settings.ini"
+        s = px.Settings(ini)
+        assert s.get_bool("ask_default_app") and s.get("last_update_check") == ""
+        s.set("ask_default_app", False)
+        s.set("last_update_check", "2026-09-08")
+        again = px.Settings(ini)
+        assert not again.get_bool("ask_default_app")
+        assert again.get("last_update_check") == "2026-09-08"
+        assert again.get_bool("check_updates")  # untouched default survives
+
+    # --- command line as re-parsed by the primary GUI instance ---------------
+    ns, unknown = px.build_parser().parse_known_args(["--gui", "a.p7m", "--future-flag"])
+    assert ns.gui and ns.paths == ["a.p7m"] and unknown == ["--future-flag"]
+
     print("all tests passed")
     return 0
 

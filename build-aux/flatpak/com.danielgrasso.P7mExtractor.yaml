@@ -1,0 +1,49 @@
+# Flatpak manifest, used for local builds and by CI.
+#
+#   flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
+#   flatpak-builder --user --install --force-clean build-dir \
+#       build-aux/flatpak/com.danielgrasso.P7mExtractor.yaml
+#   flatpak run com.danielgrasso.P7mExtractor
+#
+# The Flathub submission uses this same file with the `dir` source replaced
+# by the tagged git release (type: git, url, tag, commit).
+app-id: com.danielgrasso.P7mExtractor
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: p7m-extractor
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # The extracted document is written next to the signed file the user drops,
+  # picks or opens, and folders are scanned recursively. That needs real write
+  # access to those locations (home, removable media, network mounts), which
+  # the document portal (single file, read-only parent) cannot grant.
+  - --filesystem=host
+
+modules:
+  - name: p7m-extractor
+    buildsystem: simple
+    build-commands:
+      # pure Python, PyGObject and GTK 4 come with the GNOME runtime
+      - install -Dm755 p7m_extractor.py /app/bin/p7m-extractor
+      - install -Dm644 data/com.danielgrasso.P7mExtractor.desktop -t /app/share/applications
+      - install -Dm644 data/com.danielgrasso.P7mExtractor.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 data/icons/hicolor/scalable/apps/com.danielgrasso.P7mExtractor.svg -t /app/share/icons/hicolor/scalable/apps
+      - install -Dm644 data/icons/hicolor/symbolic/apps/com.danielgrasso.P7mExtractor-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps
+      - install -Dm644 data/icons/hicolor/64x64/apps/com.danielgrasso.P7mExtractor.png -t /app/share/icons/hicolor/64x64/apps
+      - install -Dm644 data/icons/hicolor/128x128/apps/com.danielgrasso.P7mExtractor.png -t /app/share/icons/hicolor/128x128/apps
+      - install -Dm644 data/icons/hicolor/256x256/apps/com.danielgrasso.P7mExtractor.png -t /app/share/icons/hicolor/256x256/apps
+      # fail the build early on invalid desktop entry / metainfo
+      - desktop-file-validate /app/share/applications/com.danielgrasso.P7mExtractor.desktop
+      - appstreamcli validate --no-net /app/share/metainfo/com.danielgrasso.P7mExtractor.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - dist
+          - build
