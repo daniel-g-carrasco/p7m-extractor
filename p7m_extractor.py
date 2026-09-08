@@ -27,7 +27,7 @@ import time
 from datetime import date
 from pathlib import Path
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 APP_ID = "io.github.daniel_g_carrasco.p7m-extractor"
 APP_NAME = "P7M Extractor"

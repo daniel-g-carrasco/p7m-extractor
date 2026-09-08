@@ -77,11 +77,23 @@
     <screenshot type="default">
       <caption>Main window with extracted files</caption>
       <caption xml:lang="it">Finestra principale con i file estratti</caption>
-      <image>https://raw.githubusercontent.com/daniel-g-carrasco/p7m-extractor/v1.2.0/data/screenshots/main-window.png</image>
+      <image>https://raw.githubusercontent.com/daniel-g-carrasco/p7m-extractor/v1.2.1/data/screenshots/main-window.png</image>
     </screenshot>
   </screenshots>
 
   <releases>
+    <release version="1.2.1" date="2026-09-08">
+      <description>
+        <p>Linux: the interface is now a libadwaita application and follows the
+           light and dark styles of the system on its own; new symbolic icon;
+           application ID io.github.daniel_g_carrasco.p7m-extractor, ready for
+           Flathub. Windows: Alt also closes the open menu.</p>
+        <p xml:lang="it">Linux: l'interfaccia è ora un'applicazione libadwaita e segue
+           da sola lo stile chiaro o scuro del sistema; nuova icona simbolica; ID
+           dell'applicazione io.github.daniel_g_carrasco.p7m-extractor, pronto per
+           Flathub. Windows: Alt chiude anche il menu aperto.</p>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-09-08">
       <description>
         <p>Single window for every file opened, start-up feedback, update check

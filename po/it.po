@@ -7,7 +7,7 @@
 # and compile with:  python tools/compile_po.py
 msgid ""
 msgstr ""
-"Project-Id-Version: p7m-extractor 1.2.0\n"
+"Project-Id-Version: p7m-extractor 1.2.1\n"
 "Report-Msgid-Bugs-To: https://github.com/daniel-g-carrasco/p7m-extractor/issues\n"
 "POT-Creation-Date: 2026-09-08 12:00+0200\n"
 "PO-Revision-Date: 2026-09-08 12:00+0200\n"
