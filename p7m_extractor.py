@@ -850,6 +850,18 @@ _CSS_ADW = b"""
     border-color: @accent_bg_color;
     background: alpha(@accent_bg_color, 0.08);
 }
+/* The drop zone is an AdwStatusPage; even "compact" it would take more than
+   half of the default window, leaving the results list no room. */
+.dropzone > scrolledwindow > viewport > box {
+    margin: 14px 12px;
+}
+.dropzone .icon {
+    -gtk-icon-size: 56px;
+    margin-bottom: 8px;
+}
+.dropzone .title {
+    font-size: 15pt;
+}
 """
 
 
@@ -1229,16 +1241,18 @@ def run_gui(argv, settings: Settings) -> int:
                              lambda _w, _p: setattr(self, "_alt_solo", False))
 
             content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-            set_margins(content, 16)
             if use_adw:
                 # HIG layout: the toolbar view carries the header bar, the page
-                # lives in a toast overlay so messages arrive as toasts.
+                # lives in a toast overlay so messages arrive as toasts. The
+                # 16 px page margin goes on each child here, not on the box:
+                # the results card needs a scrolled window wider than itself.
                 self.toasts = Adw.ToastOverlay(child=content)
                 view = Adw.ToolbarView()
                 view.add_top_bar(header)
                 view.set_content(self.toasts)
                 self.set_content(view)
             else:
+                set_margins(content, 16)
                 root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
                 if not use_csd:
                     root.append(header)
@@ -1295,7 +1309,10 @@ def run_gui(argv, settings: Settings) -> int:
                 for w in (icon, title, hint, btns):
                     self.dropzone.append(w)
             self.dropzone.add_css_class("dropzone")
-            set_margins(self.dropzone, top=4, bottom=4)
+            if use_adw:
+                set_margins(self.dropzone, top=20, bottom=0, start=16, end=16)
+            else:
+                set_margins(self.dropzone, top=4, bottom=4)
             content.append(self.dropzone)
 
             # --- results list ---------------------------------------------
@@ -1303,21 +1320,35 @@ def run_gui(argv, settings: Settings) -> int:
             self.listbox.connect("row-activated", self._on_row_activated)
             placeholder = Gtk.Label(label=_("Extracted files will appear here"))
             placeholder.add_css_class("dim-label")
-            set_margins(placeholder, top=24, bottom=24)
-            self.listbox.set_placeholder(placeholder)
             scrolled = Gtk.ScrolledWindow(vexpand=True, child=self.listbox)
             scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-            if use_adw:  # boxed-list draws the HIG card around the rows
+            if use_adw:
+                # The HIG card (boxed-list) hugs its rows, and sits inset in a
+                # scrolled window wider than itself: the viewport clips at its
+                # edges, so the card's shadow needs room around it. The card
+                # still lines up with the drop zone at 16 px from the window.
                 self.listbox.add_css_class("boxed-list")
-                # ...which has to hug them: filling the scrolled window would
-                # stretch the card over the empty space below the last row.
                 self.listbox.set_valign(Gtk.Align.START)
-                content.append(scrolled)
+                set_margins(self.listbox, top=4, bottom=12, start=8, end=8)
+                set_margins(scrolled, start=8, end=8)
+                # No card while there is nothing to show: an empty white card
+                # on the window background is what looks wrong.
+                placeholder.set_vexpand(True)
+                set_margins(placeholder, start=16, end=16)
+                self.list_stack = Gtk.Stack(
+                    vexpand=True, transition_type=Gtk.StackTransitionType.CROSSFADE)
+                self.list_stack.add_named(placeholder, "empty")
+                self.list_stack.add_named(scrolled, "list")
+                content.append(self.list_stack)
             else:
+                set_margins(placeholder, top=24, bottom=24)
+                self.listbox.set_placeholder(placeholder)
                 content.append(Gtk.Frame(child=scrolled))
 
             # --- bottom bar ------------------------------------------------
             bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            if use_adw:
+                set_margins(bottom, bottom=16, start=16, end=16)
             check = Gtk.CheckButton(label=_("Overwrite existing files"))
             check.connect("toggled", self.on_overwrite_toggled)
             self.summary = Gtk.Label(label="", hexpand=True, xalign=1.0)
@@ -1604,6 +1635,8 @@ def run_gui(argv, settings: Settings) -> int:
             row = ResultRow(src, self._reveal)
             self._rows[key] = row
             self.listbox.append(row)
+            if use_adw:  # first row: swap the empty state for the card
+                self.list_stack.set_visible_child_name("list")
             return False  # one-shot GLib.idle_add
 
         def _row_call(self, key, method, *args):
