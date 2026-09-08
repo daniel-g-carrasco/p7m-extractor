@@ -29,7 +29,7 @@ from pathlib import Path
 
 __version__ = "1.2.0"
 
-APP_ID = "com.danielgrasso.P7mExtractor"
+APP_ID = "com.neistar.p7m.P7mExtractor"
 APP_NAME = "P7M Extractor"
 GITHUB_REPO = "daniel-g-carrasco/p7m-extractor"
 RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"

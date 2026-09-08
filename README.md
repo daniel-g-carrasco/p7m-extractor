@@ -156,8 +156,8 @@ copying the embedded octets verbatim.
 ```bash
 flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
 flatpak-builder --user --install --force-clean build-dir \
-    build-aux/flatpak/com.danielgrasso.P7mExtractor.yaml
-flatpak run com.danielgrasso.P7mExtractor
+    build-aux/flatpak/com.neistar.p7m.P7mExtractor.yaml
+flatpak run com.neistar.p7m.P7mExtractor
 ```
 
 The manifest ([build-aux/flatpak/](build-aux/flatpak/)) installs the script,
@@ -168,9 +168,16 @@ written next to the signed one, wherever that is.
 
 Submitting to Flathub needs, in addition: a screenshot at
 `data/screenshots/main-window.png` (referenced by the metainfo at the
-release tag), ownership verification of `danielgrasso.com` for the
-`com.danielgrasso.*` app ID, and a copy of the manifest with a
-`type: git` source pinned to the release tag.
+release tag), the app ID's domain `p7m.neistar.com` answering over HTTPS
+and verified as ours, and a copy of the manifest with a `type: git` source
+pinned to the release tag.
+
+The [site/](site/) folder is that domain: a static page deployed with
+Cloudflare Pages (connect the repository, no build command, output
+directory `site`; DNS: CNAME `p7m` → the Pages project). Flathub's ownership
+check reads `site/.well-known/org.flathub.VerifiedApps.txt`: replace the
+placeholder with the token shown in the Flathub developer portal (a DNS TXT
+record `_flathub-verify.p7m.neistar.com` works too).
 
 ## Development
 
@@ -178,8 +185,8 @@ release tag), ownership verification of `danielgrasso.com` for the
 python tests/test_extract.py     # self-contained test suite, no deps
 python tools/compile_po.py       # compile po/*.po into locale/ (needed to see translations)
 python tools/make_icon.py        # regenerate assets/icon.*, data/icons PNGs, installer bitmaps (Pillow)
-desktop-file-validate data/com.danielgrasso.P7mExtractor.desktop
-appstreamcli validate --no-net data/com.danielgrasso.P7mExtractor.metainfo.xml
+desktop-file-validate data/com.neistar.p7m.P7mExtractor.desktop
+appstreamcli validate --no-net data/com.neistar.p7m.P7mExtractor.metainfo.xml
 ```
 
 Builds are produced by [CI](.github/workflows/build.yml) (PyInstaller;

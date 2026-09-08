@@ -18,7 +18,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_ID = "com.danielgrasso.P7mExtractor"
+APP_ID = "com.neistar.p7m.P7mExtractor"
 
 S = 1024  # master canvas, downscaled at the end
 

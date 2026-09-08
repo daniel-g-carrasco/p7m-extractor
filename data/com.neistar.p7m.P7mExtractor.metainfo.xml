@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- AppStream metadata: shown by GNOME Software / Flathub. -->
 <component type="desktop-application">
-  <id>com.danielgrasso.P7mExtractor</id>
+  <id>com.neistar.p7m.P7mExtractor</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
@@ -9,7 +9,7 @@
   <summary>Extract signed .p7m documents</summary>
   <summary xml:lang="it">Estrai i documenti dai file .p7m</summary>
 
-  <developer id="com.danielgrasso">
+  <developer id="com.neistar">
     <name>Daniel Grasso</name>
   </developer>
 
@@ -46,13 +46,13 @@
     </p>
   </description>
 
-  <launchable type="desktop-id">com.danielgrasso.P7mExtractor.desktop</launchable>
+  <launchable type="desktop-id">com.neistar.p7m.P7mExtractor.desktop</launchable>
   <provides>
     <binary>p7m-extractor</binary>
     <mediatype>application/pkcs7-mime</mediatype>
   </provides>
 
-  <url type="homepage">https://github.com/daniel-g-carrasco/p7m-extractor</url>
+  <url type="homepage">https://p7m.neistar.com</url>
   <url type="bugtracker">https://github.com/daniel-g-carrasco/p7m-extractor/issues</url>
   <url type="vcs-browser">https://github.com/daniel-g-carrasco/p7m-extractor</url>
 
