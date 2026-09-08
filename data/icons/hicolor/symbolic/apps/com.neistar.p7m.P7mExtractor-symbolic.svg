@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Symbolic (monochrome, 16 px) variant: a document with a seal. -->
+<!-- P7M Extractor symbolic icon. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <path d="M2 1H8.5L11 3.5V8H9.5V5H7V2.5H3.5V13.5H7.5V15H2Z" fill="#2e3436"/>
-  <path fill-rule="evenodd" fill="#2e3436"
-        d="M11.5 7.25a4.25 4.25 0 1 1 0 8.5a4.25 4.25 0 0 1 0-8.5zM9.4 11.6L10.3 10.7L11.3 11.7L13.5 9.4L14.4 10.3L11.3 13.5Z"/>
+  <!-- Monochrome, on the 16 px grid: a document with a folded corner and a
+       seal with a check mark, one pixel of clearance between the two. Fills
+       only, because GTK recolours symbolic icons through the fill property.
+       Keep the header short: gdk-pixbuf only looks for <svg> in the first
+       256 bytes, and flatpak-builder rejects icons it cannot load. -->
+  <path fill="#2e3436" fill-rule="evenodd" d="M1 1H7L10 4V6.21A5.5 5.5 0 0 0 7.26 15H1ZM2 2H6V5H9V6.6A5.5 5.5 0 0 0 6.6 14H2Z"/>
+  <path fill="#2e3436" fill-rule="evenodd" d="M7 11.5a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0 -9 0ZM8.33 12.17L10.6 14.43L14.67 10.37L13.53 9.23L10.6 12.17L9.47 11.03Z"/>
 </svg>

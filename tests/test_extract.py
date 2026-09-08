@@ -172,6 +172,20 @@ def main() -> int:
     assert not missing, f"msgids not found in the source: {missing[:5]}"
     assert px.detect_language() in px.LANGUAGES
 
+    # --- icons: gdk-pixbuf must be able to sniff them ------------------------
+    # It only looks for the <svg> element in the first 256 bytes; past that the
+    # file is "not a valid icon" and `flatpak build-export` fails. A long
+    # leading comment is enough to trigger it, so guard the offset here (pure
+    # stdlib: the CI test job has no GdkPixbuf).
+    icons = sorted((root / "data" / "icons").rglob("*.svg"))
+    assert icons, "no icon SVGs found"
+    for icon in icons:
+        head = icon.read_bytes()
+        offset = head.find(b"<svg")
+        assert 0 <= offset <= 256, (
+            f"{icon.name}: <svg> starts at byte {offset}; gdk-pixbuf only sniffs "
+            "the first 256 bytes, so flatpak-builder would reject this icon")
+
     print("all tests passed")
     return 0
 

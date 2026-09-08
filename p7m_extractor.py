@@ -1885,6 +1885,10 @@ def run_gui(argv, settings: Settings) -> int:
             if bundle:  # icons shipped inside the PyInstaller bundle
                 Gtk.IconTheme.get_for_display(display).add_search_path(
                     os.path.join(bundle, "share", "icons"))
+            else:  # source checkout: data/icons next to this file (no-op when installed)
+                icons = Path(__file__).resolve().parent / "data" / "icons"
+                if icons.is_dir():
+                    Gtk.IconTheme.get_for_display(display).add_search_path(str(icons))
             Gtk.Window.set_default_icon_name(APP_ID)
 
             css = Gtk.CssProvider()

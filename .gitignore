@@ -9,3 +9,6 @@ venv/
 sample.p7m
 sample
 locale/
+po/*.pot
+build-dir/
+.flatpak-builder/
