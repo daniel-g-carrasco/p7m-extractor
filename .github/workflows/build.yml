@@ -159,7 +159,8 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
-      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@v6
+      # action maintained in flatpak/…; the runtime images come from flathub-infra/actions-images
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: p7m-extractor-${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}-linux-x64.flatpak
           manifest-path: build-aux/flatpak/com.danielgrasso.P7mExtractor.yaml
