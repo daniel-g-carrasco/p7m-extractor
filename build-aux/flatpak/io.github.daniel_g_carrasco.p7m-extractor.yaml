@@ -8,6 +8,7 @@
 # The Flathub submission uses this same file with the `dir` source replaced
 # by the tagged git release (type: git, url, tag, commit).
 app-id: io.github.daniel_g_carrasco.p7m-extractor
+branch: stable
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk

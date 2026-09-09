@@ -34,7 +34,7 @@ Grab a build from the
 |---|---|---|
 | Windows installer | `p7m-extractor-setup-*-windows-x64.exe` | Start menu entry, uninstaller, `.p7m` file association and Explorer context menu (both optional), built-in update check |
 | Windows portable | `p7m-extractor-*-windows-x64-portable.zip` | unzip anywhere, run `p7m-extractor.exe` — no installation, no admin rights; Explorer integration can be enabled from *Preferenze* |
-| Linux Flatpak | `p7m-extractor-*-linux-x64.flatpak` | `flatpak install ./p7m-extractor-*.flatpak` (GNOME 50 runtime); Flathub listing in progress |
+| Linux Flatpak | [our repository](https://daniel-g-carrasco.github.io/p7m-extractor/) | `flatpak install https://daniel-g-carrasco.github.io/p7m-extractor/p7m-extractor.flatpakref`, updates arrive through GNOME Software; a `.flatpak` bundle is attached to every release too |
 | Linux portable | `p7m-extractor-*-linux-x64-portable.tar.gz` | untar, run `./p7m-extractor` |
 
 Everything (GTK included) ships inside the Windows and portable packages.
@@ -156,6 +156,18 @@ copying the embedded octets verbatim.
 > AgID-accredited online verifiers).
 
 ## Flatpak
+
+The app is published in its own Flatpak repository, served from GitHub Pages
+and signed with the key `CD01 04C4 EBDE 041D 4B63 E635 9240 718A F4C3 3BD2`;
+the GNOME runtime comes from Flathub. Install once, updates follow:
+
+```bash
+flatpak install https://daniel-g-carrasco.github.io/p7m-extractor/p7m-extractor.flatpakref
+```
+
+Every `v*` tag is published there by CI
+([flatpak-repo.yml](.github/workflows/flatpak-repo.yml)). To build locally
+instead:
 
 ```bash
 flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
