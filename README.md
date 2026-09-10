@@ -25,6 +25,10 @@ Drag & drop GUI (GTK 4 / libadwaita) + CLI, installable or portable on
 the PKCS#7/CMS envelope is parsed directly by a small pure-Python BER parser. The extracted
 file is **byte-for-byte identical** to what was signed.
 
+<p align="center">
+  <img src="data/screenshots/demo.gif" alt="Dropping a folder of .p7m files on P7M Extractor: the files queue up, extract with a progress bar and end with their outcome" width="800">
+</p>
+
 ## Download
 
 Grab a build from the
