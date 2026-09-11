@@ -26,7 +26,7 @@ the PKCS#7/CMS envelope is parsed directly by a small pure-Python BER parser. Th
 file is **byte-for-byte identical** to what was signed.
 
 <p align="center">
-  <img src="data/screenshots/demo.gif" alt="Dropping a folder of .p7m files on P7M Extractor: the files queue up, extract with a progress bar and end with their outcome" width="800">
+  <img src="data/screenshots/demo.gif" alt="Dropping a folder of .p7m files on P7M Extractor: the rows fill in with their outcome while the extracted PDFs appear next to the signed files in the file manager" width="800">
 </p>
 
 ## Download
