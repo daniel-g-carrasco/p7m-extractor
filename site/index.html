@@ -30,6 +30,7 @@
     ul { padding-left: 20px; }
     li { margin: 6px 0; }
     .note { border-left: 4px solid var(--accent); padding: 8px 14px; background: var(--card); border-radius: 0 8px 8px 0; }
+    .release { margin-top: -12px; color: var(--dim); font-size: .95rem; }
     footer { margin-top: 40px; color: var(--dim); font-size: .9rem; }
     a { color: var(--accent); }
     .en { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
@@ -52,12 +53,21 @@
     oppure fai doppio clic su un .p7m.
   </p>
 
+  <!-- I pulsanti di download puntano alla pagina dell'ultima release; lo script
+       in fondo li fa puntare direttamente al file dell'ultima release
+       (API GitHub), così si aggiornano da soli a ogni versione. -->
   <div class="buttons">
-    <a class="btn primary" href="https://github.com/daniel-g-carrasco/p7m-extractor/releases/latest">Scarica per Windows</a>
+    <a class="btn primary" data-asset="^p7m-extractor-setup-.*-windows-x64\.exe$" href="https://github.com/daniel-g-carrasco/p7m-extractor/releases/latest">Scarica per Windows</a>
     <a class="btn" href="https://daniel-g-carrasco.github.io/p7m-extractor/p7m-extractor.flatpakref">Installa su Linux (Flatpak)</a>
-    <a class="btn" href="https://github.com/daniel-g-carrasco/p7m-extractor/releases/latest">Linux portable</a>
+    <a class="btn" data-asset="^p7m-extractor-.*-linux-x64-portable\.tar\.gz$" href="https://github.com/daniel-g-carrasco/p7m-extractor/releases/latest">Linux portable</a>
     <a class="btn" href="https://github.com/daniel-g-carrasco/p7m-extractor">Sorgente su GitHub</a>
   </div>
+  <p class="release">
+    <span id="release-version" hidden>Ultima versione: <strong></strong>. </span>
+    Su Windows l'installer associa i .p7m e aggiunge la voce nel menu di Esplora file; c'è anche la
+    <a data-asset="^p7m-extractor-.*-windows-x64-portable\.zip$" href="https://github.com/daniel-g-carrasco/p7m-extractor/releases/latest">versione portable</a>,
+    senza installazione. Tutte le versioni nelle <a href="https://github.com/daniel-g-carrasco/p7m-extractor/releases">release su GitHub</a>.
+  </p>
 
   <ul>
     <li>Gratuito e open source (licenza MIT), nessuna dipendenza da installare</li>
@@ -85,5 +95,39 @@
     © 2026 Daniel Grasso · <a href="https://github.com/daniel-g-carrasco/p7m-extractor/issues">Segnalazioni e supporto</a>
   </footer>
 </main>
+<script>
+(async () => {
+  // Ultima release da GitHub: i link con data-asset diventano download diretti.
+  // Se l'API non risponde restano i link alla pagina della release.
+  const api = "https://api.github.com/repos/daniel-g-carrasco/p7m-extractor/releases/latest";
+  let rel = null;
+  try {
+    const cached = sessionStorage.getItem("p7m-latest");
+    if (cached) rel = JSON.parse(cached);
+  } catch (e) {}
+  if (!rel) {
+    try {
+      const r = await fetch(api);
+      if (!r.ok) return;
+      rel = await r.json();
+      try { sessionStorage.setItem("p7m-latest", JSON.stringify(rel)); } catch (e) {}
+    } catch (e) { return; }
+  }
+  if (!rel || !Array.isArray(rel.assets)) return;
+  for (const a of document.querySelectorAll("a[data-asset]")) {
+    const re = new RegExp(a.dataset.asset);
+    const asset = rel.assets.find(x => re.test(x.name));
+    if (asset) {
+      a.href = asset.browser_download_url;
+      a.title = asset.name + " (" + (asset.size / 1048576).toFixed(0) + " MB)";
+    }
+  }
+  const v = document.getElementById("release-version");
+  if (v && rel.tag_name) {
+    v.querySelector("strong").textContent = rel.tag_name.replace(/^v/, "");
+    v.hidden = false;
+  }
+})();
+</script>
 </body>
 </html>
