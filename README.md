@@ -99,6 +99,11 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 
 ### Windows integration
 
+<p align="center">
+  <img src="data/screenshots/windows-main-window.png" alt="P7M Extractor on Windows 11: native title bar, drop zone and the empty results list" width="400">
+  <img src="data/screenshots/windows-main-menu.png" alt="The main menu on Windows: Controlla aggiornamenti…, Preferenze (Ctrl+,), Informazioni su P7M Extractor" width="400">
+</p>
+
 - **Double-click** a `.p7m` to extract it on the spot (file association):
   the file lands in the window's list as *In coda*, then shows its
   extraction progress (read and write, useful on network shares) and the
@@ -122,6 +127,10 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
   the theme is dark) handles moving, snapping and restoring from maximized,
   which GTK's own decorations get wrong on Windows. *Preferenze* switches
   back to GTK's header bar.
+
+<p align="center">
+  <img src="data/screenshots/windows-context-menu.png" alt="Explorer context menu on a .p7m file: Apri, with the P7M Extractor icon, extracts it on the spot" width="500">
+</p>
 
 ### Linux
 
