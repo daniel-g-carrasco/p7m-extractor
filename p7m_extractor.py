@@ -1897,7 +1897,7 @@ def run_gui(argv, settings: Settings) -> int:
             return False
 
         def _open_page(self, _btn):
-            open_uri(self._rel["url"], self)
+            open_uri(self._rel["url"], self.get_root())     # a window, also from an AdwDialog
             self.close()
 
         def _download(self, _btn):
