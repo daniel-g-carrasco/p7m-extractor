@@ -59,8 +59,8 @@ sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
 python3 p7m_extractor.py
 ```
 
-On Windows, use a release build or MSYS2
-(`pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-python-gobject`).
+On Windows, use a release build or MSYS2 UCRT64
+(`pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-python-gobject`).
 
 ## CLI
 
@@ -123,10 +123,11 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
   new installer and launch it; the portable build is sent to the release page.
 - Everything above is per-user (`HKEY_CURRENT_USER`), also for the portable
   build; *Preferenze* → *Rimuovi* takes it all away, as does the uninstaller.
-- **Native window decorations** by default: the system title bar (dark when
-  the theme is dark) handles moving, snapping and restoring from maximized,
-  which GTK's own decorations get wrong on Windows. *Preferenze* switches
-  back to GTK's header bar.
+- **libadwaita inside, Windows outside**: the content is the same libadwaita
+  interface as on Linux (drop zone, card list, toasts, dialogs), while the
+  system title bar (dark when the theme is dark) handles moving, snapping and
+  restoring from maximized, which GTK's own decorations get wrong on Windows.
+  *Preferenze* switches to libadwaita's header bar, at the cost of snapping.
 
 <p align="center">
   <img src="data/screenshots/windows-context-menu.png" alt="Explorer context menu on a .p7m file: Apri, with the P7M Extractor icon, extracts it on the spot" width="500">
