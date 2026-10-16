@@ -15,6 +15,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
+<p align="center"><a href="CODE_SIGNING.md">Code signing policy</a></p>
+
 The `.p7m` format is used across Italy for signed drawings, contracts,
 PEC attachments and electronic invoices (Fattura Elettronica). It wraps the
 original document (PDF, XML, …) in a PKCS#7/CMS signature envelope; this tool
@@ -44,6 +46,10 @@ Grab a build from the
 Everything (GTK included) ships inside the Windows and portable packages.
 The installer defaults to a per-user install, so no administrator rights are
 needed there either.
+
+[Code signing policy](CODE_SIGNING.md): the Windows releases are to be
+signed with free code signing provided by SignPath.io, certificate by
+SignPath Foundation (applied for; until then they are not signed).
 
 ## Run from source
 
