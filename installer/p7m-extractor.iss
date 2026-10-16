@@ -114,8 +114,16 @@ Filename: "{app}\p7m-extractor.exe"; Parameters: "--unregister"; RunOnceId: "Unr
 
 [Run]
 Filename: "{app}\p7m-extractor.exe"; Description: "{cm:LaunchProgram,P7M Extractor}"; Flags: nowait postinstall skipifsilent
+; an update from the app itself (/SILENT /RELAUNCH=1): the app opens again,
+; as the user who runs it also when Setup runs as administrator
+Filename: "{app}\p7m-extractor.exe"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
 
 [Code]
+function RelaunchAfterUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;
+
 function AppLanguage(Param: String): String;
 begin
   if ActiveLanguage = 'italian' then
