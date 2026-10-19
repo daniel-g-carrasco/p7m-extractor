@@ -47,9 +47,11 @@ Everything (GTK included) ships inside the Windows and portable packages.
 The installer defaults to a per-user install, so no administrator rights are
 needed there either.
 
-[Code signing policy](CODE_SIGNING.md): the Windows releases are to be
-signed with free code signing provided by SignPath.io, certificate by
-SignPath Foundation (applied for; until then they are not signed).
+[Code signing policy](CODE_SIGNING.md): since 1.3.3 every file of a release
+is signed with minisign (the public key and how to check a download are
+there), and the installed app checks the signature of an update before
+running it. An Authenticode signature by SignPath Foundation is to come:
+until then Windows' SmartScreen warns about the installer.
 
 ## Run from source
 

@@ -67,9 +67,11 @@
     Su Windows l'installer associa i .p7m e aggiunge la voce nel menu di Esplora file; c'è anche la
     <a data-asset="^p7m-extractor-.*-windows-x64-portable\.zip$" href="https://github.com/daniel-g-carrasco/p7m-extractor/releases/latest">versione portable</a>,
     senza installazione. Tutte le versioni nelle <a href="https://github.com/daniel-g-carrasco/p7m-extractor/releases">release su GitHub</a>.
-    Firma del codice: <a href="https://github.com/daniel-g-carrasco/p7m-extractor/blob/main/CODE_SIGNING.md">Code signing policy</a>
-    (firma gratuita di SignPath.io, certificato di SignPath Foundation: richiesta, finché non è accettata le
-    versioni per Windows non sono firmate).
+    Firma: ogni file della release è firmato con minisign, e l'app installata verifica la firma di un
+    aggiornamento prima di avviarlo (chiave pubblica e istruzioni nella
+    <a href="https://github.com/daniel-g-carrasco/p7m-extractor/blob/main/CODE_SIGNING.md">Code signing policy</a>).
+    La firma Authenticode di SignPath Foundation non c'è ancora: per ora Windows avvisa che l'editore
+    è sconosciuto.
   </p>
 
   <ul>
