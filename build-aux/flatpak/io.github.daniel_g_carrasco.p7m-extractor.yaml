@@ -30,7 +30,9 @@ modules:
     buildsystem: simple
     build-commands:
       # pure Python, PyGObject and GTK 4 come with the GNOME runtime
-      - install -Dm755 p7m_extractor.py /app/bin/p7m-extractor
+      - install -d /app/share/p7m-extractor
+      - cp -r src/p7m_extractor /app/share/p7m-extractor/p7m_extractor
+      - install -Dm755 bin/p7m-extractor /app/bin/p7m-extractor
       - python3 tools/compile_po.py --dest /app/share/locale
       - install -Dm644 data/io.github.daniel_g_carrasco.p7m-extractor.desktop -t /app/share/applications
       - install -Dm644 data/io.github.daniel_g_carrasco.p7m-extractor.metainfo.xml -t /app/share/metainfo

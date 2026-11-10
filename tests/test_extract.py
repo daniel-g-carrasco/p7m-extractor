@@ -11,9 +11,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import p7m_extractor as px  # noqa: E402
+import p7m_extractor  # noqa: E402
+from p7m_extractor import cli, i18n  # noqa: E402
+from p7m_extractor.app import extract, minisign, settings, updates  # noqa: E402
+from p7m_extractor.data import cms  # noqa: E402
 
 # --- tiny BER builders ------------------------------------------------------
 
@@ -78,20 +81,20 @@ def main() -> int:
         return 0
 
     # core: definite DER
-    assert px.extract_econtent(p7m_definite(PAYLOAD)) == PAYLOAD
+    assert cms.extract_econtent(p7m_definite(PAYLOAD)) == PAYLOAD
     # core: BER streaming with 1000-byte chunks
-    assert px.extract_econtent(p7m_streaming(PAYLOAD)) == PAYLOAD
+    assert cms.extract_econtent(p7m_streaming(PAYLOAD)) == PAYLOAD
     # container: bare base64 and PEM
-    assert px.decode_container(
+    assert cms.decode_container(
         base64.encodebytes(p7m_definite(PAYLOAD))) == p7m_definite(PAYLOAD)
     pem = (b"-----BEGIN PKCS7-----\n"
            + base64.encodebytes(p7m_streaming(PAYLOAD))
            + b"-----END PKCS7-----\n")
-    assert px.extract_econtent(px.decode_container(pem)) == PAYLOAD
+    assert cms.extract_econtent(cms.decode_container(pem)) == PAYLOAD
     # errors: detached and garbage
-    expect_raises(px.BerError, px.extract_econtent, p7m_detached())
-    expect_raises(px.BerError, px.extract_econtent, b"%PDF-1.4 not signed")
-    expect_raises(px.BerError, px.extract_econtent, p7m_definite(PAYLOAD)[:50])
+    expect_raises(cms.BerError, cms.extract_econtent, p7m_detached())
+    expect_raises(cms.BerError, cms.extract_econtent, b"%PDF-1.4 not signed")
+    expect_raises(cms.BerError, cms.extract_econtent, p7m_definite(PAYLOAD)[:50])
 
     # file-level: naming, nested envelopes, skip/overwrite
     with tempfile.TemporaryDirectory() as td:
@@ -99,19 +102,19 @@ def main() -> int:
 
         f = td / "doc.pdf.p7m"
         f.write_bytes(p7m_streaming(PAYLOAD))
-        dest, layers = px.extract_file(f)
+        dest, layers = extract.extract_file(f)
         assert dest == td / "doc.pdf" and layers == 1
         assert dest.read_bytes() == PAYLOAD
 
         nested = td / "doppia.pdf.p7m.p7m"
         nested.write_bytes(p7m_definite(p7m_streaming(PAYLOAD)))
-        dest, layers = px.extract_file(nested)
+        dest, layers = extract.extract_file(nested)
         assert dest == td / "doppia.pdf" and layers == 2
         assert dest.read_bytes() == PAYLOAD
 
-        expect_raises(FileExistsError, px.extract_file, f)
+        expect_raises(FileExistsError, extract.extract_file, f)
         seen = []
-        dest, _ = px.extract_file(f, overwrite=True, progress=seen.append)
+        dest, _ = extract.extract_file(f, overwrite=True, progress=seen.append)
         assert dest.read_bytes() == PAYLOAD
         # progress climbs monotonically from the read phase to 1.0
         assert seen == sorted(seen) and seen[-1] == 1.0 and 0.0 < seen[0] <= 0.5
@@ -120,29 +123,29 @@ def main() -> int:
         (td / "sub").mkdir()
         upper = td / "sub" / "UPPER.XML.P7M"
         upper.write_bytes(p7m_definite(b"<xml/>"))
-        found = px.iter_p7m([td])
+        found = extract.iter_p7m([td])
         assert upper in found and f in found and nested in found
 
     # --- update check helpers (no network) ---------------------------------
-    assert px.parse_version("v1.10.2") == (1, 10, 2)
-    assert px.parse_version("2") == (2,)
-    assert px.is_newer("1.2.1", "1.2.0") and not px.is_newer("1.2.0", "1.2.0")
-    assert px.is_newer("v2", "1.9.9") and not px.is_newer("1.2", "1.2.0")
+    assert updates.parse_version("v1.10.2") == (1, 10, 2)
+    assert updates.parse_version("2") == (2,)
+    assert updates.is_newer("1.2.1", "1.2.0") and not updates.is_newer("1.2.0", "1.2.0")
+    assert updates.is_newer("v2", "1.9.9") and not updates.is_newer("1.2", "1.2.0")
     def asset(name, **changes):
-        return {"name": name, "url": px.DOWNLOADS_URL + "v1.3.0/" + name, "size": 9000, "sha256": "ab", "signature_url": px.DOWNLOADS_URL + "v1.3.0/" + name + ".minisig", **changes}
+        return {"name": name, "url": p7m_extractor.DOWNLOADS_URL + "v1.3.0/" + name, "size": 9000, "sha256": "ab", "signature_url": p7m_extractor.DOWNLOADS_URL + "v1.3.0/" + name + ".minisig", **changes}
     assets = [asset("p7m-extractor-v1.3.0-windows-x64-portable.zip"),
               asset("p7m-extractor-setup-v1.3.0-windows-x64.exe"),
               asset("p7m-extractor-v1.3.0-linux-x64-portable.tar.gz")]
-    assert px.pick_asset(assets, installed=True)["name"].endswith(".exe")
-    assert px.pick_asset(assets, installed=False)["name"].endswith(".zip")
-    assert px.pick_asset([], installed=True) is None
+    assert updates.pick_asset(assets, installed=True)["name"].endswith(".exe")
+    assert updates.pick_asset(assets, installed=False)["name"].endswith(".zip")
+    assert updates.pick_asset([], installed=True) is None
     # the installer, which is run: a released one, from this project, with its checksum
     setup = "p7m-extractor-setup-v1.3.0-windows-x64.exe"
-    assert px.pick_asset([asset(setup, sha256="")], installed=True) is None
-    assert px.pick_asset([asset(setup, url="https://example.com/" + setup)], installed=True) is None
-    assert px.pick_asset([asset("p7m-extractor-setup-vdev-windows-x64.exe")], installed=True) is None
-    assert px.pick_asset([asset(setup, signature_url="")], installed=True) is None          # not signed
-    assert px.pick_asset([asset(setup, signature_url="https://example.com/s.minisig")], installed=True) is None
+    assert updates.pick_asset([asset(setup, sha256="")], installed=True) is None
+    assert updates.pick_asset([asset(setup, url="https://example.com/" + setup)], installed=True) is None
+    assert updates.pick_asset([asset("p7m-extractor-setup-vdev-windows-x64.exe")], installed=True) is None
+    assert updates.pick_asset([asset(setup, signature_url="")], installed=True) is None          # not signed
+    assert updates.pick_asset([asset(setup, signature_url="https://example.com/s.minisig")], installed=True) is None
     # the releases' minisign signature: Ed25519 against RFC 8032's vectors
     import hashlib
     for public, message, signature in (
@@ -153,8 +156,8 @@ def main() -> int:
              "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eae"
              "b4302aeeb00d291612bb0c00")):
         public, message, signature = bytes.fromhex(public), bytes.fromhex(message), bytes.fromhex(signature)
-        assert px.ed25519_verify(public, message, signature)
-        assert not px.ed25519_verify(public, message + b"x", signature)
+        assert minisign.ed25519_verify(public, message, signature)
+        assert not minisign.ed25519_verify(public, message + b"x", signature)
     # signatures made by minisign 0.12 with a key of the tests' own
     test_key = "RWR7SJiRpYyOYfMs5NsaotSrG3B4wGxiTvXOWkzu4JCT3e240QSuHElq"
     signed_got = ("untrusted comment: signature from minisign secret key\n"
@@ -166,17 +169,17 @@ def main() -> int:
                     "trusted comment: timestamp:1792398099 file:other.exe hashed\n"
                     "L5a1c0bubqCfk4+ZchcJRRg8+Bi2WpL63yOy2uQk4amVYDJdN/fSCGPcny6gaY+7CpQmwcUAk8p4JXkFjaiUCQ==\n")
     payload_digest = hashlib.blake2b(b"installer" * 1000, digest_size=64).digest()
-    assert px.minisign_verify(payload_digest, signed_got, test_key) == "timestamp:1792398099 file:got.exe hashed"
-    expect_raises(ValueError, px.minisign_verify, hashlib.blake2b(b"other", digest_size=64).digest(), signed_got,
+    assert minisign.minisign_verify(payload_digest, signed_got, test_key) == "timestamp:1792398099 file:got.exe hashed"
+    expect_raises(ValueError, minisign.minisign_verify, hashlib.blake2b(b"other", digest_size=64).digest(), signed_got,
                   test_key)
-    expect_raises(ValueError, px.minisign_verify, payload_digest, signed_got, px.UPDATE_PUBLIC_KEY)    # another key
+    expect_raises(ValueError, minisign.minisign_verify, payload_digest, signed_got, updates.UPDATE_PUBLIC_KEY)    # another key
     forged = signed_got.split("\n")
     forged[2] = signed_other.split("\n")[2]                    # another file's name, the comment's signature kept
-    expect_raises(ValueError, px.minisign_verify, payload_digest, "\n".join(forged), test_key)
-    expect_raises(ValueError, px.minisign_verify, payload_digest, "Not Found", test_key)
+    expect_raises(ValueError, minisign.minisign_verify, payload_digest, "\n".join(forged), test_key)
+    expect_raises(ValueError, minisign.minisign_verify, payload_digest, "Not Found", test_key)
     # downloaded: checked against its size, its checksum and its signature (for
     # this very file, by this project's key), or refused
-    real_key, px.UPDATE_PUBLIC_KEY = px.UPDATE_PUBLIC_KEY, test_key
+    real_key, updates.UPDATE_PUBLIC_KEY = updates.UPDATE_PUBLIC_KEY, test_key
     try:
         with tempfile.TemporaryDirectory() as td:
             source = Path(td) / "setup.exe"
@@ -185,7 +188,7 @@ def main() -> int:
             for name, text in (("got.minisig", signed_got), ("other.minisig", signed_other)):
                 (Path(td) / name).write_text(text, encoding="utf-8")
             signature = (Path(td) / "got.minisig").as_uri()
-            got = px.download_file(source.as_uri(), Path(td) / "got.exe", sha256=good, size=9000,
+            got = updates.download_file(source.as_uri(), Path(td) / "got.exe", sha256=good, size=9000,
                                    signature_url=signature)
             assert got.read_bytes() == source.read_bytes()
             got.unlink()
@@ -195,31 +198,31 @@ def main() -> int:
                                   ("got.exe", {"signature_url": source.as_uri()}),
                                   ("other-name.exe", {})):
                 kw = {"sha256": good, "size": 9000, "signature_url": signature, **changes}
-                expect_raises(px.UpdateError, px.download_file, source.as_uri(), Path(td) / dest, **kw)
+                expect_raises(updates.UpdateError, updates.download_file, source.as_uri(), Path(td) / dest, **kw)
                 assert not (Path(td) / dest).exists() and not (Path(td) / (dest + ".part")).exists()
-            px.UPDATE_PUBLIC_KEY = real_key                   # the project's own: not the one that signed it
-            expect_raises(px.UpdateError, px.download_file, source.as_uri(), Path(td) / "got.exe",
+            updates.UPDATE_PUBLIC_KEY = real_key                   # the project's own: not the one that signed it
+            expect_raises(updates.UpdateError, updates.download_file, source.as_uri(), Path(td) / "got.exe",
                           sha256=good, size=9000, signature_url=signature)
     finally:
-        px.UPDATE_PUBLIC_KEY = real_key
+        updates.UPDATE_PUBLIC_KEY = real_key
     # the release workflow checks its signatures with the key the code trusts
     workflow = (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "build.yml")
-    assert f"PUBLIC_KEY: {px.UPDATE_PUBLIC_KEY}\n" in workflow.read_text(encoding="utf-8")
+    assert f"PUBLIC_KEY: {updates.UPDATE_PUBLIC_KEY}\n" in workflow.read_text(encoding="utf-8")
 
     # --- preferences round-trip ----------------------------------------------
     with tempfile.TemporaryDirectory() as td:
         ini = Path(td) / "cfg" / "settings.ini"
-        s = px.Settings(ini)
+        s = settings.Settings(ini)
         assert s.get_bool("ask_default_app") and s.get("last_update_check") == ""
         s.set("ask_default_app", False)
         s.set("last_update_check", "2026-09-08")
-        again = px.Settings(ini)
+        again = settings.Settings(ini)
         assert not again.get_bool("ask_default_app")
         assert again.get("last_update_check") == "2026-09-08"
         assert again.get_bool("check_updates")  # untouched default survives
 
     # --- command line as re-parsed by the primary GUI instance ---------------
-    ns, unknown = px.build_parser().parse_known_args(["--gui", "a.p7m", "--future-flag"])
+    ns, unknown = cli.build_parser().parse_known_args(["--gui", "a.p7m", "--future-flag"])
     assert ns.gui and ns.paths == ["a.p7m"] and unknown == ["--future-flag"]
 
     # --- translations: po -> mo compiler and gettext plumbing ----------------
@@ -230,18 +233,19 @@ def main() -> int:
         written = compile_po.compile_all(root / "po", Path(td))
         assert [lang for lang, _count, _out in written] == ["it"]
         import gettext
-        it = gettext.translation(px.TEXTDOMAIN, td, languages=["it"])
+        it = gettext.translation(p7m_extractor.TEXTDOMAIN, td, languages=["it"])
         assert it.gettext("Queued") == "In coda"
         assert it.gettext("Extracting… {percent}%") == "Estrazione in corso… {percent}%"
         assert it.gettext("not a translated string") == "not a translated string"
     # every msgid in the catalogue must exist in the source (adjacent string
     # literals split over lines are joined first)
     import re
-    source = re.sub(r'"\s*\n\s*"', "", (root / "p7m_extractor.py").read_text(encoding="utf-8"))
+    source = re.sub(r'"\s*\n\s*"', "", "\n".join(p.read_text(encoding="utf-8")
+                                                    for p in sorted((root / "src" / "p7m_extractor").rglob("*.py"))))
     entries = compile_po.parse_po(root / "po" / "it.po")
     missing = [m for m in entries if m and m not in source]
     assert not missing, f"msgids not found in the source: {missing[:5]}"
-    assert px.detect_language() in px.LANGUAGES
+    assert i18n.detect_language() in i18n.LANGUAGES
 
     # --- icons: gdk-pixbuf must be able to sniff them ------------------------
     # It only looks for the <svg> element in the first 256 bytes; past that the

@@ -64,7 +64,7 @@ falls back to plain GTK 4.
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
                          sudo dnf install python3-gobject gtk4 libadwaita
                                                            sudo pacman -S python-gobject gtk4 libadwaita
-python3 p7m_extractor.py
+python3 bin/p7m-extractor
 ```
 
 On Windows, use a release build or MSYS2 UCRT64
@@ -217,8 +217,17 @@ output directory `site`).
 
 ## Development
 
+The code is the package `src/p7m_extractor/`, in four layers with the
+imports going one way only: `core/` (plain logic), `data/` (the .p7m
+container, bytes in and bytes out), `app/` (extraction of a file, settings,
+updates, the Windows registry; no toolkit) and `gui/` (the GTK window, the
+only place `gi` is imported). `gui` uses `app`, `app` uses `core` and `data`,
+`core` and `data` know nobody. `tests/test_strati.py` reads the imports and
+fails with file, line and rule.
+
 ```bash
 python tests/test_extract.py     # self-contained test suite, no deps
+python tests/test_strati.py      # the layers: every import goes one way
 python tools/compile_po.py       # compile po/*.po into locale/ (needed to see translations)
 python tools/make_icon.py        # regenerate assets/icon.*, data/icons PNGs, installer bitmaps (Pillow)
 desktop-file-validate data/io.github.daniel_g_carrasco.p7m-extractor.desktop
@@ -228,7 +237,7 @@ appstreamcli validate --no-net data/io.github.daniel_g_carrasco.p7m-extractor.me
 Builds are produced by [CI](.github/workflows/build.yml) (PyInstaller;
 MSYS2 on Windows; installer compiled with Inno Setup; Flatpak via
 flatpak-builder). Tagging `v*` publishes a release; the tag must match
-`__version__` in `p7m_extractor.py`, and the release should be listed in
+`__version__` in `src/p7m_extractor/__init__.py`, and the release should be listed in
 the metainfo. Most of the package size is the bundled GTK stack; CI strips
 unused locales and icon-theme variants to keep it in check.
 
@@ -237,7 +246,7 @@ Windows and `$XDG_CONFIG_HOME/p7m-extractor/settings.ini` on Linux.
 
 Translations live in `po/` (English source strings in the code, one `.po`
 per language). To refresh the template after changing strings:
-`xgettext --from-code=UTF-8 --keyword=_ -o po/p7m-extractor.pot p7m_extractor.py`,
+`xgettext --from-code=UTF-8 --keyword=_ -o po/p7m-extractor.pot $(find src -name '*.py' | sort)`,
 then merge with `msgmerge -U po/it.po po/p7m-extractor.pot`.
 Set `P7M_STARTUP_LOG=<file>` to get start-up timestamps appended to a file
 (profiling aid).

@@ -59,7 +59,8 @@ if WIN:
 GI_VERSIONS = {'Gtk': '4.0', 'Gdk': '4.0', 'Adw': '1'}
 
 a = Analysis(
-    ['p7m_extractor.py'],
+    [os.path.join(SPECPATH, 'build-aux', 'windows', 'p7m_extractor_main.py')],
+    pathex=[os.path.join(SPECPATH, 'src')],
     binaries=binaries,
     datas=datas,
     hooksconfig={'gi': {'module-versions': GI_VERSIONS}},

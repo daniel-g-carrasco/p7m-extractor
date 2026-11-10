@@ -1,0 +1,16 @@
+#!/usr/bin/python3
+"""Launcher: runs from a source checkout (src/ next to bin/) or from an
+installed copy (the Flatpak puts the package in /app/share/p7m-extractor)."""
+
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in (os.path.join(here, "..", "src"), "/app/share/p7m-extractor"):
+    if os.path.isdir(os.path.join(candidate, "p7m_extractor")):
+        sys.path.insert(0, os.path.abspath(candidate))
+        break
+
+from p7m_extractor.__main__ import main  # noqa: E402
+
+sys.exit(main())

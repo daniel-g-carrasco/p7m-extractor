@@ -2,7 +2,7 @@
 ; Compiled by CI with:  ISCC.exe /DAppVersion=X.Y.Z installer\p7m-extractor.iss
 ; Expects the PyInstaller output in dist\p7m-extractor (repo root).
 ;
-; The registry layout below mirrors win_register() in p7m_extractor.py
+; The registry layout below mirrors win_register() in src/p7m_extractor/app/windows_shell.py
 ; (ProgID P7MExtractor.p7m, verb P7MExtractor.extract): keep them in sync.
 ; Every user-visible string lives in [CustomMessages], once per language.
 
