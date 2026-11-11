@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>P7M Extractor</title>
-  <meta name="description" content="Estrae il documento originale dai file firmati digitalmente .p7m (CAdES). Windows e Linux, gratuito e open source.">
+  <meta name="description" content="Estrae il documento originale dai file firmati digitalmente .p7m (CAdES) e ne controlla le firme. Windows e Linux, gratuito e open source.">
   <link rel="icon" href="icon.png">
   <style>
     :root {
@@ -77,14 +77,18 @@
   <ul>
     <li>Gratuito e open source (licenza MIT), nessuna dipendenza da installare</li>
     <li>Estrazione in serie con avanzamento per ogni file, firme annidate risolte in un passaggio</li>
+    <li>Controllo delle firme: chi ha firmato, se il documento è quello firmato, se il certificatore è nelle
+        liste di fiducia europee, se il certificato è stato revocato</li>
     <li>Contenitori binari, base64 e PEM, incluso lo streaming BER dei software di firma italiani</li>
     <li>Interfaccia in italiano e inglese, tema chiaro e scuro</li>
   </ul>
 
   <p class="note">
-    Lo strumento <em>estrae</em> il contenuto firmato: non verifica certificati né il valore legale
-    della firma. Per una verifica con valore legale usa un servizio qualificato (GoSign, ArubaSign,
-    i verificatori accreditati AgID).
+    Il controllo delle firme avviene sul tuo computer: nessun documento ne esce, vengono solo scaricate
+    le liste di fiducia europee e viene chiesto al certificatore se il certificato è revocato.
+    P7M Extractor non è però un servizio di convalida qualificato: ciò che dice di una firma è un
+    controllo informato, senza valore legale. Quando serve un rapporto con valore legale usa un
+    servizio qualificato (GoSign, ArubaSign, i verificatori accreditati AgID).
   </p>
 
   <section class="en" lang="en">
@@ -92,7 +96,10 @@
     <p>
       P7M Extractor unwraps CAdES <strong>.p7m</strong> digitally signed files and saves the original
       document, byte for byte, next to the signed one. Drag &amp; drop files or folders, or
-      double-click a .p7m. Free and open source (MIT), for Windows and Linux.
+      double-click a .p7m. It also checks the signatures: who signed, whether the document is the one
+      that was signed, whether the certifier is in the European trusted lists and the certificate
+      was revoked; it is not a qualified validation service. Free and open source (MIT), for Windows
+      and Linux.
     </p>
   </section>
 

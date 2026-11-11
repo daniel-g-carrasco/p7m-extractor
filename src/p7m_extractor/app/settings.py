@@ -29,6 +29,7 @@ class Settings:
         "system_title_bar": "true",
         "ask_default_app": "true",     # Windows: offer to become the .p7m handler
         "check_updates": "true",       # Windows: look for a new release daily
+        "verify_signatures": "true",   # check who signed and whether the signature holds (uses the network)
         "last_update_check": "",       # ISO date of the last automatic check
     }
 

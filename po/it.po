@@ -151,8 +151,8 @@ msgstr "Estrazione in corso… {percent}%"
 msgid "Extracted{extra} → {name}"
 msgstr "Estratto{extra} → {name}"
 
-msgid "Skipped: the extracted file already exists (enable Overwrite)"
-msgstr "Saltato: il file estratto esiste già (attiva Sovrascrivi)"
+msgid "Extraction skipped: the extracted file already exists (enable Overwrite)"
+msgstr "Estrazione saltata: il file estratto esiste già (attiva Sovrascrivi)"
 
 msgid "Error: {error}"
 msgstr "Errore: {error}"
@@ -393,3 +393,220 @@ msgstr "Voci di Esplora file rimosse per l'utente corrente."
 
 msgid "Removal failed: {error}"
 msgstr "Rimozione non riuscita: {error}"
+
+msgid "Valid signature, with a qualified certificate on a secure device"
+msgstr "Firma valida, con certificato qualificato su dispositivo sicuro"
+
+msgid "Valid signature, with a qualified certificate"
+msgstr "Firma valida, con certificato qualificato"
+
+msgid "Valid signature (not with a qualified certificate)"
+msgstr "Firma valida (non con un certificato qualificato)"
+
+msgid "Not valid: {why}"
+msgstr "Non valida: {why}"
+
+msgid "Not established: {why}"
+msgstr "Non stabilito: {why}"
+
+msgid "Intact, and the certifier is in the trusted lists kept; whether the certificate was revoked was not checked (no network)"
+msgstr "Integra, e il certificatore è nelle liste di fiducia conservate; la revoca del certificato non è stata controllata (senza rete)"
+
+msgid "Intact; the certificate and its certifier were not checked (no network)"
+msgstr "Integra; il certificato e il certificatore non sono stati controllati (senza rete)"
+
+msgid "the document was changed after it was signed"
+msgstr "il documento è stato modificato dopo la firma"
+
+msgid "the signature does not match the certificate"
+msgstr "la firma non corrisponde al certificato"
+
+msgid "the signature is not written as the standard asks"
+msgstr "la firma non è scritta come chiede lo standard"
+
+msgid "the certificate had been revoked when the signature was made"
+msgstr "il certificato era già revocato quando è stata fatta la firma"
+
+msgid "the certificate was revoked, and no time stamp proves the signature is older"
+msgstr "il certificato è stato revocato, e nessuna marca temporale prova che la firma sia precedente"
+
+msgid "the certifier's certificate was revoked, and no time stamp proves the signature is older"
+msgstr "il certificato del certificatore è stato revocato, e nessuna marca temporale prova che la firma sia precedente"
+
+msgid "the certificate had expired when the signature was made"
+msgstr "il certificato era già scaduto quando è stata fatta la firma"
+
+msgid "the certificate has expired, and no time stamp proves the signature is older"
+msgstr "il certificato è scaduto, e nessuna marca temporale prova che la firma sia precedente"
+
+msgid "the certificate was not valid yet when the signature was made"
+msgstr "il certificato non era ancora valido quando è stata fatta la firma"
+
+msgid "the certifier is not in the trusted lists"
+msgstr "il certificatore non è nelle liste di fiducia"
+
+msgid "the signer's certificate is not in the file"
+msgstr "il certificato del firmatario non è nel file"
+
+msgid "the certifier did not say whether the certificate is revoked: try again later"
+msgstr "il certificatore non ha detto se il certificato è revocato: riprova più tardi"
+
+msgid "the certificate's chain could not be checked"
+msgstr "la catena del certificato non si è potuta controllare"
+
+msgid "the signature uses an algorithm no longer held safe"
+msgstr "la firma usa un algoritmo non più ritenuto sicuro"
+
+msgid "the trusted lists could not be had"
+msgstr "non è stato possibile avere le liste di fiducia"
+
+msgid "whether the certificate was revoked could not be established"
+msgstr "non è stato possibile stabilire se il certificato è stato revocato"
+
+msgid "unknown reason"
+msgstr "motivo sconosciuto"
+
+msgid "(no name in the certificate)"
+msgstr "(nessun nome nel certificato)"
+
+msgid "Checked by this program, which is not a qualified validation service."
+msgstr "Controllo fatto da questo programma, che non è un servizio di convalida qualificato."
+
+msgid "This build cannot verify signatures: the pyHanko library is missing."
+msgstr "Questa versione non può verificare le firme: manca la libreria pyHanko."
+
+msgid "check the signatures of the files and say who signed, instead of extracting"
+msgstr "controlla le firme dei file e dice chi ha firmato, invece di estrarre"
+
+msgid "with --verify: do not use the network (integrity only, and the trusted lists kept)"
+msgstr "con --verify: non usare la rete (solo l'integrità, e le liste di fiducia conservate)"
+
+msgid "Without the network: revocations were not checked."
+msgstr "Senza rete: le revoche non sono state controllate."
+
+msgid "No trusted lists kept: certifiers were not looked up."
+msgstr "Nessuna lista di fiducia conservata: i certificatori non sono stati cercati."
+
+msgid "Trusted lists kept {days} days ago."
+msgstr "Liste di fiducia conservate {days} giorni fa."
+
+msgid "Signatures…"
+msgstr "Firme…"
+
+
+msgid "Signatures"
+msgstr "Firme"
+
+msgid "Verify the signatures"
+msgstr "Verifica le firme"
+
+msgid "Asks the European trusted lists and the certifier; no document leaves the computer"
+msgstr "Interroga le liste di fiducia europee e il certificatore; nessun documento esce dal computer"
+
+msgid "Intact"
+msgstr "Integra"
+
+msgid "Valid"
+msgstr "Valida"
+
+msgid "Not established"
+msgstr "Non stabilito"
+
+msgid "Not valid"
+msgstr "Non valida"
+
+msgid "Signature on the document"
+msgstr "Firma sul documento"
+
+msgid "Innermost signature · on the document"
+msgstr "Firma più interna · apposta sul documento"
+
+msgid "Outermost signature · on the file already signed"
+msgstr "Firma più esterna · apposta sul file già firmato"
+
+msgid "Signature {n} of {total} from the outside · on the file already signed"
+msgstr "Firma {n} di {total} dall'esterno · apposta sul file già firmato"
+
+msgid "Signed by"
+msgstr "Firmato da"
+
+msgid "One signature"
+msgstr "Una firma"
+
+msgid "No signature found"
+msgstr "Nessuna firma trovata"
+
+msgid "Organisation"
+msgstr "Organizzazione"
+
+msgid "Identifier"
+msgstr "Identificativo"
+
+msgid "Certifier"
+msgstr "Certificatore"
+
+msgid "Certificate valid"
+msgstr "Validità del certificato"
+
+msgid "Time of signing"
+msgstr "Data della firma"
+
+msgid "; at that time the certificate was within its dates"
+msgstr "; a quella data il certificato era nelle sue date di validità"
+
+msgid "All valid"
+msgstr "Tutte valide"
+
+msgid "{when}, written by the signer and not proven by a time stamp"
+msgstr "{when}, scritta dal firmatario e non provata da una marca temporale"
+
+msgid "not in the file"
+msgstr "non presente nel file"
+
+msgid "Trusted lists"
+msgstr "Liste di fiducia"
+
+msgid "the certificate calls itself qualified; its certifier could not be looked up"
+msgstr "il certificato si dichiara qualificato; il certificatore non si è potuto cercare"
+
+msgid "certifier found in the European lists, as qualified for signatures"
+msgstr "certificatore trovato nelle liste europee, come qualificato per le firme"
+
+msgid "certifier not found in the European lists"
+msgstr "certificatore non trovato nelle liste europee"
+
+msgid "{n} signatures, one inside the other"
+msgstr "{n} firme, una dentro l'altra"
+
+msgid "{n} signatures in {layers} envelopes, one inside the other"
+msgstr "{n} firme in {layers} buste, una dentro l'altra"
+
+msgid "{n} signatures, side by side"
+msgstr "{n} firme, affiancate"
+
+msgid "{name}: {summary}"
+msgstr "{name}: {summary}"
+
+msgid "from {start} to {end}"
+msgstr "dal {start} al {end}"
+
+msgid "{when}, proven by a time stamp"
+msgstr "{when}, provata da una marca temporale"
+
+msgid "Outcome"
+msgstr "Esito"
+
+msgid "The document that was signed"
+msgstr "Il documento che è stato firmato"
+
+msgid "Trusted lists of today."
+msgstr "Liste di fiducia di oggi."
+
+msgid "Signature: waiting to be checked"
+msgstr "Firma: in attesa del controllo"
+
+msgid "Signature: being checked…"
+msgstr "Firma: controllo in corso…"
+
+msgid "Signature: could not be checked"
+msgstr "Firma: non è stato possibile controllarla"

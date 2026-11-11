@@ -11,8 +11,9 @@ from datetime import date
 from pathlib import Path
 
 from p7m_extractor import APP_ID, APP_NAME, GITHUB_REPO, PACKAGE_DIR, __version__, _mark
+from p7m_extractor.app import verify
 from p7m_extractor.app.extract import extract_file, iter_p7m
-from p7m_extractor.app.settings import Settings
+from p7m_extractor.app.settings import Settings, config_dir
 from p7m_extractor.app.updates import (
     UpdateError,
     clean_update_downloads,
@@ -33,8 +34,10 @@ from p7m_extractor.app.windows_shell import (
 )
 from p7m_extractor.cli import build_parser
 from p7m_extractor.data.cms import BerError
+from p7m_extractor.core import verdict
 from p7m_extractor.i18n import _
 
+from . import signatures
 from .winquirks import win_watch_quirks
 
 # GTK 4 GUI
@@ -413,8 +416,9 @@ def run_gui(argv, settings: Settings) -> int:
     class ResultRow(Gtk.ListBoxRow):
         """One file in the results list: queued → extracting → outcome."""
 
-        def __init__(self, src, on_reveal):
+        def __init__(self, src, on_reveal, checks_signature=False):
             super().__init__(activatable=False)  # activatable once extracted
+            self.src = src
             self._on_reveal = on_reveal
             self.dest = None
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -434,15 +438,64 @@ def run_gui(argv, settings: Settings) -> int:
             self.status.add_css_class("dim-label")
             self.bar = Gtk.ProgressBar(visible=False)
             self.bar.set_margin_top(4)
-            for w in (name, self.status, self.bar):
+            # what the verification found, under the outcome of the extraction
+            self.signature = Gtk.Label(xalign=0.0, visible=False)
+            self.signature.set_ellipsize(Pango.EllipsizeMode.END)
+            self.signature.add_css_class("dim-label")
+            self.layers = []         # the signatures, one list per envelope, outermost first
+            for w in (name, self.status, self.bar, self.signature):
                 texts.append(w)
+            self.sign_btn = Gtk.Button(valign=Gtk.Align.CENTER, visible=False, tooltip_text=_("Signatures…"))
+            self.sign_btn.add_css_class("flat")
+            if checks_signature:
+                # said from the start, and with its place kept: the row does not
+                # grow when the outcome comes, nor the text move for the button
+                self.signature.set_label(_("Signature: waiting to be checked"))
+                self.signature.set_visible(True)
+                self.sign_btn.set_icon_name("content-loading-symbolic")
+                self.sign_btn.set_sensitive(False)
+                self.sign_btn.set_visible(True)
             self.open_btn = Gtk.Button(icon_name="folder-open-symbolic",
                                        valign=Gtk.Align.CENTER, visible=False,
                                        tooltip_text=_("Open folder"))
             self.open_btn.add_css_class("flat")
-            for w in (self.stack, texts, self.open_btn):
+            for w in (self.stack, texts, self.sign_btn, self.open_btn):
                 box.append(w)
             self.set_child(box)
+
+        def verifying(self):
+            self.signature.set_label(_("Signature: being checked…"))
+            self.signature.set_visible(True)
+
+        def signed(self, layers, on_details):
+            """What the verification found: one line, and a button for the rest."""
+            self.layers = layers
+            if not signatures.everyone(layers):     # no .p7m, unreadable: the extraction said so already
+                self.signature.set_label(_("Signature: could not be checked"))
+                self.sign_btn.set_visible(False)
+                return
+            state = verdict.worst(signatures.everyone(layers))
+            text = signatures.one_line(layers)
+            self.signature.set_label(text)
+            self.signature.set_tooltip_text(text)
+            self.signature.set_visible(True)
+            self.sign_btn.set_icon_name(signatures.icon_of(state))
+            for cls in ("success", "warning", "error"):
+                self.sign_btn.remove_css_class(cls)
+            self.sign_btn.add_css_class(signatures.class_of(state))
+            self.sign_btn.set_sensitive(True)
+            self.sign_btn.set_visible(True)
+            self.sign_btn.connect("clicked", lambda _b: on_details(self))
+
+        def document_name(self):
+            """The name of what was signed: the extracted file's, or the
+            source's without its .p7m endings."""
+            if self.dest is not None:
+                return self.dest.name
+            name = self.src.name
+            while name.lower().endswith(".p7m") and len(name) > 4:
+                name = name[:-4]
+            return name
 
         def start(self):
             self.status.set_label(_("Extracting…"))
@@ -471,7 +524,7 @@ def run_gui(argv, settings: Settings) -> int:
                 self.open_btn.connect("clicked", lambda _b: self._on_reveal(self.dest))
             elif err == "exists":
                 icon_name, cls = "action-unavailable-symbolic", "dim-label"
-                text, outcome = _("Skipped: the extracted file already exists (enable Overwrite)"), 1
+                text, outcome = _("Extraction skipped: the extracted file already exists (enable Overwrite)"), 1
             else:
                 icon_name, cls = "dialog-error-symbolic", "error"
                 text, outcome = _("Error: {error}").format(error=err), 2
@@ -501,6 +554,7 @@ def run_gui(argv, settings: Settings) -> int:
             self._counts = [0, 0, 0]  # ok, skipped, errors
             self._pending = 0         # batches queued or running
             self._rows = {}           # row key -> ResultRow
+            self._listed = {}         # row key -> ResultRow, once its extraction is over (for the verification)
             self._seq = itertools.count()
             self._native = None       # keep FileChooserNative alive
             self._banner_cb = None
@@ -938,6 +992,16 @@ def run_gui(argv, settings: Settings) -> int:
                         GLib.idle_add(self._row_done, key, None, 0, "exists")
                     except (BerError, OSError) as e:
                         GLib.idle_add(self._row_done, key, None, 0, str(e))
+                if self._checks_signatures():
+                    # after the extractions, which never wait for the network
+                    lists = config_dir() / "trusted-lists"
+                    for key, f in zip(keys, files):
+                        GLib.idle_add(self._row_listed, key, "verifying")
+                        try:
+                            layers = verify.verify_file(f, online=True, lists_folder=lists)
+                        except Exception:       # no .p7m, unreadable: the extraction said so already
+                            layers = []
+                        GLib.idle_add(self._row_listed, key, "signed", layers, self._signatures)
                 GLib.idle_add(self._batch_done)
 
         def _progress_reporter(self, key):
@@ -962,7 +1026,7 @@ def run_gui(argv, settings: Settings) -> int:
             return False
 
         def _row_add(self, key, src):
-            row = ResultRow(src, self._reveal)
+            row = ResultRow(src, self._reveal, checks_signature=self._checks_signatures())
             self._rows[key] = row
             self.listbox.append(row)
             if use_adw:  # first row: swap the empty state for the card
@@ -978,9 +1042,25 @@ def run_gui(argv, settings: Settings) -> int:
         def _row_done(self, key, dest, layers, err):
             row = self._rows.pop(key, None)
             if row is not None:
+                self._listed[key] = row
                 self._counts[row.finish(dest, layers, err)] += 1
                 self._set_counts()
             return False
+
+        def _checks_signatures(self):
+            return verify.available() and self.settings.get_bool("verify_signatures")
+
+        def _row_listed(self, key, method, *args):
+            row = self._listed.get(key)
+            if row is not None:
+                getattr(row, method)(*args)
+                if method == "signed":
+                    self._listed.pop(key, None)
+            return False
+
+        def _signatures(self, row):
+            """The details of a file's signatures, in an inner window as the others are."""
+            SignaturesDialog(self, row).open()
 
         def _set_counts(self):
             ok, skip, errn = self._counts
@@ -1121,6 +1201,31 @@ def run_gui(argv, settings: Settings) -> int:
                 self._parent.show_banner(make_default())
 
     # --- update dialog (Windows) --------------------------------------------
+
+    class SignaturesDialog(Adw.Dialog if use_adw else Gtk.Window):
+        """Who signed a file and how each signature stands (gui/signatures.py)."""
+
+        def __init__(self, parent, row):
+            age = verify.lists_age(config_dir() / "trusted-lists")
+            days = age.days if age is not None else None
+            if use_adw:
+                super().__init__(title=_("Signatures"), content_width=600, content_height=640)
+                view = Adw.ToolbarView()
+                view.add_top_bar(Adw.HeaderBar())
+                view.set_content(signatures.content(row.layers, row.document_name(), days))
+                self.set_child(view)
+            else:
+                super().__init__(transient_for=parent, modal=True, title=_("Signatures"),
+                                 default_width=600, default_height=640)
+                init_dialog(self)
+                self.set_child(signatures.plain(row.layers, row.document_name(), days))
+            self._parent = parent
+
+        def open(self):
+            if use_adw:
+                self.present(self._parent)
+            else:
+                self.present()
 
     class UpdateDialog(Adw.Dialog if use_adw else Gtk.Window):
         def __init__(self, parent, rel):
@@ -1294,6 +1399,15 @@ def run_gui(argv, settings: Settings) -> int:
                     self._switch("check_updates")))
                 box.append(Gtk.Frame(child=general))
 
+            if verify.available():
+                box.append(self._section(_("Signatures")))
+                signing = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+                signing.append(self._row(
+                    _("Verify the signatures"),
+                    _("Asks the European trusted lists and the certifier; no document leaves the computer"),
+                    self._switch("verify_signatures")))
+                box.append(Gtk.Frame(child=signing))
+
                 box.append(self._section(_("File Explorer")))
                 shell = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
                 set_btn = Gtk.Button(label=_("Set…"), valign=Gtk.Align.CENTER)
@@ -1435,6 +1549,13 @@ def run_gui(argv, settings: Settings) -> int:
         if is_win:
             group.add(switch(_("Windows title bar"), TITLE_BAR_HINT, "system_title_bar"))
         page.add(group)
+
+        if verify.available():
+            group = Adw.PreferencesGroup(title=_("Signatures"))
+            group.add(switch(_("Verify the signatures"),
+                             _("Asks the European trusted lists and the certifier; no document leaves the computer"),
+                             "verify_signatures"))
+            page.add(group)
 
         if is_win:
             group = Adw.PreferencesGroup(title=_("General"))

@@ -17,6 +17,13 @@ jobs:
           python-version: "3.12"
       - run: python tests/test_extract.py
       - run: python tests/test_strati.py
+      - name: The verification of signatures, with the pyHanko the builds carry
+        # tools/flatpak_wheels.py is the one place where its version is written
+        run: |
+          pip install "pyhanko[etsi]==$(python tools/flatpak_wheels.py --version)"
+          python tests/test_verify.py -v 2>&1 | tee verify.log
+          if grep -q "skipped" verify.log; then echo "the checks were skipped: pyHanko did not load"; exit 1; fi
+          python tools/flatpak_wheels.py --check
       - name: Validate desktop entry and AppStream metadata
         run: |
           sudo apt-get update
@@ -51,6 +58,18 @@ jobs:
             mingw-w64-ucrt-x86_64-python-gobject
             mingw-w64-ucrt-x86_64-pyinstaller
             mingw-w64-ucrt-x86_64-ca-certificates
+            mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-python-cryptography
+            mingw-w64-ucrt-x86_64-python-lxml
+            mingw-w64-ucrt-x86_64-python-aiohttp
+            mingw-w64-ucrt-x86_64-python-asn1crypto
+      - name: pyHanko, for the verification of signatures
+        # what has compiled parts comes from MSYS2 (above), the rest from
+        # PyPI, in the version tools/flatpak_wheels.py pins for every build
+        run: |
+          pip install --break-system-packages "pyhanko[etsi]==$(python tools/flatpak_wheels.py --version)"
+          python tests/test_verify.py -v 2>&1 | tee verify.log
+          if grep -q "skipped" verify.log; then echo "the checks were skipped: pyHanko did not load"; exit 1; fi
       - name: Build with PyInstaller
         run: |
           python tools/compile_po.py
@@ -63,7 +82,8 @@ jobs:
           ls "$I"/libadwaita-1-*.dll
           ls "$I"/libgtk-4-*.dll
           test -f "$I/gdbus.exe"          # single-instance support (GApplication)
-          test -f "$I/certs/ca-bundle.crt" # TLS for the update check
+          test -f "$I/certs/ca-bundle.crt" # TLS for the update check and the trusted lists
+          test -f "$I/pyhanko/sign/validation/qualified/lotl-certs/latest.cert.pem"  # who signs the European list of lists
           test -f "$I/share/icons/hicolor/scalable/apps/io.github.daniel_g_carrasco.p7m-extractor.svg"
           test -f "$I/share/locale/it/LC_MESSAGES/p7m-extractor.mo"
       - name: Ensure GLib schemas and icon themes are bundled
@@ -94,6 +114,25 @@ jobs:
           test -f sample
       - name: Smoke test (update check reaches GitHub over TLS)
         run: ./dist/p7m-extractor/p7m-extractor.exe --check-update
+      - name: Smoke test (signatures checked by the bundled exe)
+        # the sample's certifier is the tests' own, in no trusted list: the
+        # outcome is never a pass (0), and never a crash; 3 = not established
+        run: |
+          python tests/test_verify.py --make-sample signed.pdf.p7m.p7m
+          for mode in --offline --online; do
+            option="$mode"; [ "$mode" = --online ] && option=""
+            code=0
+            ./dist/p7m-extractor/p7m-extractor.exe --verify $option signed.pdf.p7m.p7m > "verify$mode.txt" 2>&1 || code=$?
+            cat "verify$mode.txt"
+            test "$code" = 3
+            grep -q "Anna Bianchi" "verify$mode.txt"
+            grep -q "Bruno Verdi" "verify$mode.txt"
+          done
+          if ls "$LOCALAPPDATA/p7m-extractor/trusted-lists"/* >/dev/null 2>&1; then
+            echo "the European trusted lists were fetched and kept"
+          else
+            echo "::warning::the European trusted lists were not fetched in this run: look at the output above"
+          fi
       - name: Package
         run: |
           VERSION="${GITHUB_REF_NAME}"
@@ -150,7 +189,7 @@ jobs:
         run: |
           python3 tools/compile_po.py
           python3 -m venv --system-site-packages .venv
-          .venv/bin/pip install pyinstaller
+          .venv/bin/pip install pyinstaller "pyhanko[etsi]==$(python3 tools/flatpak_wheels.py --version)"
           .venv/bin/pyinstaller --noconfirm p7m-extractor.spec
       - name: Verify GTK 4, libadwaita and the translations are in the bundle
         run: |
@@ -159,6 +198,8 @@ jobs:
           ls dist/p7m-extractor/_internal/libgtk-4*.so*
           ls dist/p7m-extractor/_internal/libadwaita-1*.so*
           test -f dist/p7m-extractor/_internal/share/locale/it/LC_MESSAGES/p7m-extractor.mo
+          test -f dist/p7m-extractor/_internal/pyhanko/sign/validation/qualified/lotl-certs/latest.cert.pem
+          test -f dist/p7m-extractor/_internal/certifi/cacert.pem
       - name: Slim the bundle (locales and icon variants the app never loads)
         run: |
           I=dist/p7m-extractor/_internal
@@ -171,6 +212,25 @@ jobs:
           python3 tests/test_extract.py --make-sample sample.p7m
           ./dist/p7m-extractor/p7m-extractor sample.p7m
           test -f sample
+      - name: Smoke test (signatures checked by the bundled binary)
+        # the sample's certifier is the tests' own, in no trusted list: the
+        # outcome is never a pass (0), and never a crash; 3 = not established
+        run: |
+          .venv/bin/python tests/test_verify.py --make-sample signed.pdf.p7m.p7m
+          for mode in --offline --online; do
+            option="$mode"; [ "$mode" = --online ] && option=""
+            code=0
+            ./dist/p7m-extractor/p7m-extractor --verify $option signed.pdf.p7m.p7m > "verify$mode.txt" 2>&1 || code=$?
+            cat "verify$mode.txt"
+            test "$code" = 3
+            grep -q "Anna Bianchi" "verify$mode.txt"
+            grep -q "Bruno Verdi" "verify$mode.txt"
+          done
+          if ls "${XDG_CONFIG_HOME:-$HOME/.config}/p7m-extractor/trusted-lists"/* >/dev/null 2>&1; then
+            echo "the European trusted lists were fetched and kept"
+          else
+            echo "::warning::the European trusted lists were not fetched in this run: look at the output above"
+          fi
       - name: Package
         run: |
           VERSION="${GITHUB_REF_NAME}"

@@ -24,15 +24,121 @@ finish-args:
   # access to those locations (home, removable media, network mounts), which
   # the document portal (single file, read-only parent) cannot grant.
   - --filesystem=host
+  # Verifying a signature asks the European trusted lists and the certifier's
+  # revocation server. No document is sent: only the lists are fetched and
+  # the certificate's serial number is asked about. Without the network the
+  # app says so and checks the integrity alone.
+  - --share=network
 
 modules:
+  # The verification of the signatures: pyHanko and what it needs, as the
+  # wheels pinned in tools/flatpak_wheels.py, which writes the block between
+  # the two marks (and with --check says if it is still what it would write).
+  # Nothing is fetched while building beyond these files.
+  - name: python3-pyhanko
+    buildsystem: simple
+    build-commands:
+      # --ignore-installed: the Sdk has some of these (lxml) and pip would
+      # leave them out, but the Platform the app runs on does not
+      - pip3 install --prefix=${FLATPAK_DEST} --no-deps --no-index --no-build-isolation --ignore-installed *.whl
+    sources:
+      # wheels: begin (tools/flatpak_wheels.py)
+      - type: file
+        url: https://files.pythonhosted.org/packages/71/43/1947f06babed6b3f1d7f38b0c767f52df66bfb2bc10b468c4a7de9eceff2/aiohappyeyeballs-2.7.1-py3-none-any.whl
+        sha256: 9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
+      - type: file
+        url: https://files.pythonhosted.org/packages/68/30/173960c42b05a6c59f7558e4b12a4b0d9ba376cf6aa9bde7f9e08a30ca8d/aiohttp-3.14.5-py3-none-any.whl
+        sha256: efc21a454892828368b11c2c780de0ff8bc991f73f6b99c6b66e56205470929b
+      - type: file
+        url: https://files.pythonhosted.org/packages/fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/aiosignal-1.4.0-py3-none-any.whl
+        sha256: 053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e
+      - type: file
+        url: https://files.pythonhosted.org/packages/c9/7f/09065fd9e27da0eda08b4d6897f1c13535066174cc023af248fc2a8d5e5a/asn1crypto-1.5.1-py2.py3-none-any.whl
+        sha256: db4e40728b728508912cbb3d44f19ce188f218e9eba635821bb4b68564f8fd67
+      - type: file
+        url: https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl
+        sha256: c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
+      - type: file
+        url: https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl
+        sha256: e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
+      - type: file
+        url: https://files.pythonhosted.org/packages/95/95/86342356ff5953b3fb06f7ef7c5bee212d45e770abc7218d451b9148313c/cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+        sha256: a931079504ecc49efed7744c476a5c343a92fabf66dec2db95edb1b2fdc770e2
+        only-arches: [x86_64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/37/6f/3b5ce4c3b2192d250f04908f2bfd91ef34552ec8f7716a5d4abdb8d67bb2/cffi-2.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+        sha256: f16c709686a78c727bbbf059f92b0bf41c6fc60deec706d2dc19f529175a6125
+        only-arches: [aarch64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/21/69/64cef1f702bf6657e0cc186ed1a2891d50d29fb41586b254e1c07adea261/cryptography-50.0.2-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+        sha256: 630ebfea3bf689d075f82316324ff7433dc447fe6bc1bfc76524b74b4a9567d2
+        only-arches: [x86_64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/d9/69/c9bd862c3bf43d6399c433caf002df16e2dffd4be49bdf515cda38038711/cryptography-50.0.2-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+        sha256: 79def8d059362e7831389ed3be0ecdf58a89386e1271e35dd9f5af84e81bffd0
+        only-arches: [aarch64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/9a/9a/e35b4a917281c0b8419d4207f4334c8e8c5dbf4f3f5f9ada73958d937dcc/frozenlist-1.8.0-py3-none-any.whl
+        sha256: 0c18a16eab41e82c295618a77502e17b195883241c563b00f0aa5106fc4eaa0d
+      - type: file
+        url: https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl
+        sha256: ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+      - type: file
+        url: https://files.pythonhosted.org/packages/ab/8d/8a7b91df0b54d09d25f5f44885d6b3e0a6d6643a8c070191580318d20c42/lxml-6.1.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+        sha256: b477912f42c5c33405a10c759d22f80cf5af043ae02d95b9d8e5e5bc555739ed
+        only-arches: [x86_64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/35/42/df27b56848acd29d8a720acc28977911aab36f2a09df4208d5502e887415/lxml-6.1.3-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+        sha256: 611a51e61c92f62345a50b0035df6fc0d678f9299f33728826d831598862f59d
+        only-arches: [aarch64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/9d/96/1aaad0e5df33f1f5af21775c411349c0234a6edd581ea403bc81919a6eab/multidict-7.2.1-py3-none-any.whl
+        sha256: 08ea94663d9e7c25d14d78222f7aee906c472d4837766bec62477c38f6e419dc
+      - type: file
+        url: https://files.pythonhosted.org/packages/01/7c/fa07d3da2b6253eb8474be16eab2eadf670460e364ccc895ca7ff388ee30/oscrypto-1.3.0-py2.py3-none-any.whl
+        sha256: 2b2f1d2d42ec152ca90ccb5682f3e051fb55986e1b170ebde472b133713e7085
+      - type: file
+        url: https://files.pythonhosted.org/packages/f5/cd/785c64ed382f3f04201870267b02783f63b4678c2acfddc177a3ebcc2727/propcache-0.5.4-py3-none-any.whl
+        sha256: 62c60aec739ed00124573cce1178138fd690c7676352d67a37328c1cf51d7468
+      - type: file
+        url: https://files.pythonhosted.org/packages/b6/ae/315bbeee126a769cbde43cf4908acb4b40408d8bf8bbf334dd7368d8dadf/pycparser-3.12-py3-none-any.whl
+        sha256: a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e
+      - type: file
+        url: https://files.pythonhosted.org/packages/62/bf/0e6441ccf1ed3e5eea3b5d945d888b312281b5ad81e4c98c14a9f2295841/pyhanko-0.38.1-py3-none-any.whl
+        sha256: 723fdf1a6e27be72d0d7fbf65deccf03aeaa6fafbdddc5c698b6b2eba06c543d
+      - type: file
+        url: https://files.pythonhosted.org/packages/e8/22/fc8a485269187b85eadd2cf536b92be403a238932e7d3943ba176fb31041/pyhanko_certvalidator-0.33.0-py3-none-any.whl
+        sha256: 72d3b830c0427a7aae45873ba7b4e34cb86caed451eff9dfb4394a69e93bb169
+      - type: file
+        url: https://files.pythonhosted.org/packages/95/5e/30f87403a323c24a9e39fb87b90baf9017271ddaeeaee27dcab20cc9659f/signxml-5.2.0-py3-none-any.whl
+        sha256: 47667e55d3bf974ba69cbc489610890d27052d4584a29c3d29e7cf578d50a429
+      - type: file
+        url: https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl
+        sha256: 481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+      - type: file
+        url: https://files.pythonhosted.org/packages/7b/c1/9be4e1a8a30db8729a86628073910e56f85aaf8a659e053f376a2e6ea5a8/tzlocal-5.4.5-py3-none-any.whl
+        sha256: ecab534f6d65d9deb4c4ea52c121ab6dd5958e9b878e71dcb102578269752454
+      - type: file
+        url: https://files.pythonhosted.org/packages/7d/6d/df2746975b6c43aec6f0f50ddc1fa8e5dc5b579ebd2afa75173b4b23518b/uritools-7.0.0-py3-none-any.whl
+        sha256: 41a5d1c0ff82d73fc3c59a34e8103f699791d41fff9e3bd272a055249641b889
+      - type: file
+        url: https://files.pythonhosted.org/packages/07/fe/5a9698cef0850317de2a8f3c50519fbaa2cc4225d15bcfe9922e4dff8380/xsdata-26.10-py3-none-any.whl
+        sha256: 37a697d60db1396a0431750486744a7e0491fd60669751d95e3ede08f034e0c6
+      - type: file
+        url: https://files.pythonhosted.org/packages/54/22/318c7980066769c6bcd9221ed2248294f5698811da099013098c670565ed/yarl-1.25.1-py3-none-any.whl
+        sha256: 681c758b0490f9e96b78e5fa8e8dc6e648e9185bb6eaebe73183c33ea0c445f3
+      # wheels: end
+
   - name: p7m-extractor
     buildsystem: simple
     build-commands:
-      # pure Python, PyGObject and GTK 4 come with the GNOME runtime
+      # PyGObject and GTK 4 come with the GNOME runtime, pyHanko from the module above
       - install -d /app/share/p7m-extractor
       - cp -r src/p7m_extractor /app/share/p7m-extractor/p7m_extractor
       - install -Dm755 bin/p7m-extractor /app/bin/p7m-extractor
+      # the wheels above do load on the runtime's Python, and the checks pass with them
+      - python3 -c "import sys; sys.path.insert(0, 'src'); from p7m_extractor.app import verify; sys.exit(0 if verify.available() else 'pyHanko does not load')"
+      - python3 tests/test_verify.py
       - python3 tools/compile_po.py --dest /app/share/locale
       - install -Dm644 data/io.github.daniel_g_carrasco.p7m-extractor.desktop -t /app/share/applications
       - install -Dm644 data/io.github.daniel_g_carrasco.p7m-extractor.metainfo.xml -t /app/share/metainfo

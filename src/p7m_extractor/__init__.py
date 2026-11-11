@@ -23,7 +23,7 @@ import os
 import time
 from pathlib import Path
 
-__version__ = "1.3.6"
+__version__ = "1.4.0"
 
 APP_ID = "io.github.daniel_g_carrasco.p7m-extractor"
 APP_NAME = "P7M Extractor"

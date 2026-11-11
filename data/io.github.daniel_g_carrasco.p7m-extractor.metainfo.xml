@@ -6,8 +6,8 @@
   <project_license>MIT</project_license>
 
   <name>P7M Extractor</name>
-  <summary>Extract signed .p7m documents</summary>
-  <summary xml:lang="it">Estrai i documenti dai file .p7m</summary>
+  <summary>Extract and check signed .p7m documents</summary>
+  <summary xml:lang="it">Estrai e controlla i documenti firmati .p7m</summary>
 
   <developer id="io.github.daniel_g_carrasco">
     <name>Daniel Grasso</name>
@@ -33,16 +33,20 @@
       <li xml:lang="it">Estrazione in serie con risultati in tempo reale</li>
       <li>Nested signatures unwrapped in a single pass</li>
       <li xml:lang="it">Firme annidate risolte in un solo passaggio</li>
+      <li>Signatures checked: who signed, whether the document is the one that was signed, the certifier in the European trusted lists, the revocation</li>
+      <li xml:lang="it">Firme controllate: chi ha firmato, se il documento è quello firmato, il certificatore nelle liste di fiducia europee, la revoca</li>
       <li>Binary, base64 and PEM containers, BER streaming included</li>
       <li xml:lang="it">Contenitori binari, base64 e PEM, incluso lo streaming BER</li>
     </ul>
     <p>
-      The tool extracts the signed content; it does not validate certificates
-      or the legal value of the signature.
+      The signatures are checked on your computer and no document leaves it.
+      The app is not a qualified validation service: what it says about a
+      signature is an informed check, without legal value.
     </p>
     <p xml:lang="it">
-      Lo strumento estrae il contenuto firmato; non verifica i certificati né
-      il valore legale della firma.
+      Le firme sono controllate sul tuo computer e nessun documento ne esce.
+      L'app non è un servizio di convalida qualificato: ciò che dice di una
+      firma è un controllo informato, senza valore legale.
     </p>
   </description>
 
@@ -82,6 +86,16 @@
   </screenshots>
 
   <releases>
+    <release version="1.4.0" date="2026-11-11">
+      <description>
+        <p>New: the signatures are checked. After the extraction each file says who signed it and how the check went: valid, not established (and why), not valid, or intact when there is no network. The shield on the row opens the details: who signed, the certifier, the dates of the certificate, the time of signing.</p>
+        <p>A signature inside another (file.pdf.p7m.p7m) is checked envelope by envelope, and the details draw them one inside the other.</p>
+        <p>The check asks the European trusted lists and the certifier's revocation server; no document leaves the computer. Without the network the integrity alone is checked, and the app says so. A switch in the preferences turns the check off. The app is not a qualified validation service.</p>
+        <p>Command line: --verify says who signed and whether the signature holds, without extracting; --offline does it without the network.</p>
+        <p>A file left as it is because its document is already there now says "Extraction skipped".</p>
+        <p>Flatpak: the app now asks for network access, for the check of the signatures.</p>
+      </description>
+    </release>
     <release version="1.3.6" date="2026-11-10">
       <description>
         <p>Windows: the window resizes, maximizes and drags as Windows itself does it again. The workarounds of the last versions got in the way of that and are replaced by lighter ones: opening the menu no longer shrinks a maximized window, and a menu left open when the window is minimized is closed when the window comes back.</p>

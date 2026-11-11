@@ -9,8 +9,17 @@ from p7m_extractor.app.settings import Settings
 from p7m_extractor.app.windows_shell import win_register, win_unregister
 
 from . import _mark
-from .cli import build_parser, run_check_update, run_cli
+from .cli import build_parser, run_check_update, run_cli, run_verify
 from .i18n import _, setup_i18n
+
+
+def never_failing(stream) -> None:
+    """A character the stream cannot write becomes a "?" instead of an
+    error: on Windows an output sent to a file or to another program is in
+    the system's code page, which has no letter for many names of signers
+    and of files (a "Ł", an arrow), and the command would stop half way."""
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(errors="replace")
 
 
 def main() -> int:
@@ -20,6 +29,8 @@ def main() -> int:
         sys.stdout = open(os.devnull, "w", encoding="utf-8")
     if sys.stderr is None:
         sys.stderr = open(os.devnull, "w", encoding="utf-8")
+    never_failing(sys.stdout)
+    never_failing(sys.stderr)
 
     settings = Settings()
     setup_i18n(settings.get("language"))
@@ -38,6 +49,8 @@ def main() -> int:
             win_unregister()
             print(_("File Explorer integration removed for the current user."))
         return 0
+    if args.verify:
+        return run_verify(args.paths, online=not args.offline)
     if args.paths and not args.gui:
         return run_cli(args.paths, args.overwrite)
     from p7m_extractor.gui.application import run_gui       # the toolkit, only when a window is wanted

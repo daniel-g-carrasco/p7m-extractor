@@ -54,6 +54,32 @@ if WIN:
     else:
         print('WARNING: no CA bundle found: the update check may fail on TLS')
 
+# Signature verification (pyHanko): the certificates of the European list of
+# trusted lists, the XML schemas and the tables its libraries read at run
+# time are files next to the modules, which PyInstaller does not take by
+# itself; and the modules pyHanko loads by name. Without pyHanko the build
+# is made all the same and says it cannot verify.
+hidden = []
+try:
+    import pyhanko  # noqa: F401
+    from importlib.metadata import PackageNotFoundError
+    from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
+    for package in ('pyhanko', 'pyhanko_certvalidator', 'signxml', 'xsdata', 'certifi', 'tzdata'):
+        datas += collect_data_files(package)
+    # the licences of what is bundled travel with it (they are in each
+    # package's metadata folder, which PyInstaller leaves out by itself)
+    for package in ('pyhanko', 'pyhanko-certvalidator', 'cryptography', 'cffi', 'pycparser', 'lxml', 'asn1crypto',
+                    'oscrypto', 'uritools', 'signxml', 'xsdata', 'typing-extensions', 'certifi', 'tzlocal', 'tzdata',
+                    'aiohttp', 'aiohappyeyeballs', 'aiosignal', 'attrs', 'frozenlist', 'idna', 'multidict',
+                    'propcache', 'yarl'):
+        try:
+            datas += copy_metadata(package)
+        except PackageNotFoundError:
+            pass            # not on this system (tzdata is Windows' only)
+    hidden = collect_submodules('pyhanko.sign.validation') + collect_submodules('pyhanko.generated')
+except ImportError:
+    print('WARNING: pyHanko missing: this build will not verify signatures')
+
 # Introspection modules the gi hook must collect: a libadwaita app on both
 # systems (on Windows inside a window with the system title bar).
 GI_VERSIONS = {'Gtk': '4.0', 'Gdk': '4.0', 'Adw': '1'}
@@ -63,6 +89,7 @@ a = Analysis(
     pathex=[os.path.join(SPECPATH, 'src')],
     binaries=binaries,
     datas=datas,
+    hiddenimports=hidden,
     hooksconfig={'gi': {'module-versions': GI_VERSIONS}},
 )
 

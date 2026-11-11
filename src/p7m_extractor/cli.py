@@ -61,6 +61,55 @@ def run_cli(paths, overwrite: bool) -> int:
     return 0 if n_err == 0 else 1
 
 
+def run_verify(paths, online: bool) -> int:
+    """`--verify`: who signed each file and whether the signature holds,
+    without extracting anything. Exit 0 when every signature of every file
+    passed, 3 when something could not be established (or only the integrity
+    was checked, without the network), 1 when a signature is wrong or a file
+    could not be read."""
+    from p7m_extractor.app import verify
+    from p7m_extractor.app.settings import config_dir
+    from p7m_extractor.core import verdict
+
+    files = iter_p7m(paths)
+    if not files:
+        print(_("No .p7m files found."), file=sys.stderr)
+        return 1
+    if not verify.available():
+        print(_("This build cannot verify signatures: the pyHanko library is missing."), file=sys.stderr)
+        return 1
+    lists = config_dir() / "trusted-lists"
+    states = set()
+    for f in files:
+        print(f)
+        try:
+            layers = verify.verify_file(f, online=online, lists_folder=lists)
+        except (BerError, OSError) as e:
+            print(f"  ERR   {e}", file=sys.stderr)
+            states.add(verdict.FAILED)
+            continue
+        title, outcome = verdict.headline(layers)
+        print(f"  {title}: {outcome}")
+        for depth, signers in enumerate(layers):            # each envelope a step further in
+            pad = "  " * (depth + 1)
+            print(f"{pad}{verdict.layer_caption(depth, len(layers))}")
+            for signer in signers:
+                for number, line in enumerate(verdict.lines(signer)):
+                    print(f"{pad}  {'- ' if number == 0 else '  '}{line}")
+        everyone = [signer for signers in layers for signer in signers]
+        states.add(verdict.worst(everyone) if everyone else verdict.FAILED)
+    print()
+    print(_("Checked by this program, which is not a qualified validation service."))
+    if not online:
+        age = verify.lists_age(lists)
+        print(_("Without the network: revocations were not checked.") + " " + (
+            _("Trusted lists kept {days} days ago.").format(days=age.days) if age is not None
+            else _("No trusted lists kept: certifiers were not looked up.")))
+    if verdict.FAILED in states:
+        return 1
+    return 0 if states == {verdict.PASSED} else 3
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="p7m-extractor",
@@ -73,6 +122,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help=_(".p7m files or folders to scan (recursive)"))
     parser.add_argument("--overwrite", action="store_true",
                         help=_("overwrite existing extracted files"))
+    parser.add_argument("--verify", action="store_true",
+                        help=_("check the signatures of the files and say who signed, instead of extracting"))
+    parser.add_argument("--offline", action="store_true",
+                        help=_("with --verify: do not use the network (integrity only, and the trusted lists kept)"))
     parser.add_argument("--gui", action="store_true",
                         help=_("force the graphical interface"))
     parser.add_argument("--check-update", action="store_true",

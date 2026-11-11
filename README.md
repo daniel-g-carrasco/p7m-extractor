@@ -5,7 +5,7 @@
 <h1 align="center">P7M Extractor</h1>
 
 <p align="center">
-  Extract the original document from CAdES <code>.p7m</code> digitally signed files.
+  Extract the original document from CAdES <code>.p7m</code> digitally signed files, and check who signed them.
 </p>
 
 <p align="center">
@@ -23,9 +23,12 @@ original document (PDF, XML, …) in a PKCS#7/CMS signature envelope; this tool
 unwraps it.
 
 Drag & drop GUI (GTK 4 / libadwaita) + CLI, installable or portable on
-**Windows**, Flatpak or portable on **Linux**. No third-party Python packages:
-the PKCS#7/CMS envelope is parsed directly by a small pure-Python BER parser. The extracted
-file is **byte-for-byte identical** to what was signed.
+**Windows**, Flatpak or portable on **Linux**. The PKCS#7/CMS envelope is
+parsed directly by a small pure-Python BER parser, with no third-party
+package: the extracted file is **byte-for-byte identical** to what was signed.
+Since 1.4 the app also [checks the signatures](#verifying-signatures): who
+signed, whether the document is still the one that was signed, and whether
+the certifier is in the European trusted lists.
 
 <p align="center">
   <img src="data/screenshots/demo.gif" alt="Dropping a folder of .p7m files on P7M Extractor: the rows fill in with their outcome while the extracted PDFs appear next to the signed files in the file manager" width="800">
@@ -70,6 +73,14 @@ python3 bin/p7m-extractor
 On Windows, use a release build or MSYS2 UCRT64
 (`pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-python-gobject`).
 
+Checking the signatures needs [pyHanko](https://github.com/MatthiasValvekens/pyHanko)
+as well: `pip install "pyhanko[etsi]==$(python3 tools/flatpak_wheels.py --version)"`,
+the version every build carries. On MSYS2 take what has compiled parts from
+pacman first (`mingw-w64-ucrt-x86_64-python-pip`, `-python-cryptography`,
+`-python-lxml`, `-python-aiohttp`, `-python-asn1crypto`), then the same `pip`
+line with `--break-system-packages`. Without pyHanko everything else works,
+and the app says that it cannot verify.
+
 ## CLI
 
 The same executable works headless when given arguments
@@ -79,12 +90,17 @@ The same executable works headless when given arguments
 p7m-extractor invoice.xml.p7m                 # single file
 p7m-extractor --overwrite projects/           # whole folder, recursive
 p7m-extractor a.pdf.p7m b.pdf.p7m c.xml.p7m   # batch
+p7m-extractor --verify contract.pdf.p7m       # who signed, and whether the signature holds
+p7m-extractor --verify --offline projects/    # without the network: the integrity alone
 p7m-extractor --check-update                  # print the latest release
 p7m-extractor --register | --unregister       # Windows: Explorer integration
 ```
 
 Exit code is non-zero if any file failed. Existing outputs are skipped unless
-`--overwrite` is given.
+`--overwrite` is given. `--verify` extracts nothing and ends with 0 when every
+signature of every file passed, 3 when something could not be established (or
+only the integrity was checked), 1 when a signature is wrong or a file could
+not be read.
 
 ## Features
 
@@ -95,6 +111,9 @@ Exit code is non-zero if any file failed. Existing outputs are skipped unless
 - **Single window**: opening more files (double-click, context menu, several
   files selected at once) adds them to the window already open
 - **Nested signatures** (`doc.pdf.p7m.p7m`) unwrapped in a single pass
+- **Signatures checked** after the extraction: each row says who signed and
+  how the check went, and its shield opens the details
+  ([Verifying signatures](#verifying-signatures))
 - **Binary and base64/PEM** `.p7m` containers auto-detected
 - **BER streaming** (indefinite-length, chunked content) fully supported —
   the encoding used by common Italian signing tools
@@ -172,10 +191,45 @@ openssl cms -verify -noverify -binary -inform DER -in file.pdf.p7m -out file.pdf
 P7M Extractor sidesteps both problems by parsing the envelope itself and
 copying the embedded octets verbatim.
 
-> **Note on legal validity** — this tool *extracts* the signed content; it
-> does **not** validate certificates, trust chains or revocation. For legally
-> meaningful verification use a qualified service (GoSign, ArubaSign, the
-> AgID-accredited online verifiers).
+## Verifying signatures
+
+After the extraction the app checks every signature of the file, also those
+of an envelope inside another (`doc.pdf.p7m.p7m`: each envelope is checked on
+what it signed, and the window draws them one inside the other, however many
+they are). For each signature it says who signed (name, organisation and
+identifier, as the certificate writes them), which certifier issued the
+certificate and its dates, the time of signing and whether a time stamp
+proves it, and one of four outcomes:
+
+| Outcome | What it means |
+|---|---|
+| **Valid** | the document is the one that was signed, the certificate leads to a certifier in the European trusted lists, and the certifier answered that it is not revoked |
+| **Not established** | nothing is wrong with the signature itself, but something could not be confirmed: the certificate has expired and no time stamp proves that the signature is older, the certifier is not in the lists, the revocation could not be asked |
+| **Not valid** | the document was changed after the signature, or the signature does not match its certificate |
+| **Intact** | without the network, or with `--offline`: the integrity was checked, the certificate and its certifier were not |
+
+The first three are the outcomes of ETSI EN 319 102-1 (passed, indeterminate,
+failed); the fourth is the app's own way of saying that it checked less. A
+signature is never called valid unless the revocation was asked, and a
+certificate that calls itself qualified is said to be so only when its
+certifier is in the lists as qualified for signatures.
+
+**What goes over the network.** The European list of trusted lists and the
+list of the country of the signer's certificate are fetched and kept for a day
+in `trusted-lists`, next to the settings; without the network the copy kept is
+used, and its age is said. The certifier's revocation server (OCSP or CRL) is
+asked about the certificate, which it knows by its serial number. No document
+and no file name leave the computer. *Preferences → Signatures* turns the
+whole check off.
+
+**What this is not.** The check is made on your computer with
+[pyHanko](https://github.com/MatthiasValvekens/pyHanko) (MIT), following the
+European rules for validating signatures, but P7M Extractor is not a
+*qualified validation service* in the sense of Article 33 of Regulation (EU)
+No 910/2014 (eIDAS): what it says is an informed check, not a report with
+legal value. When one is needed (a tender, a dispute, an archive), use a
+qualified service or the verifier of a qualified provider (GoSign, ArubaSign,
+the AgID-accredited online verifiers).
 
 ## Flatpak
 
@@ -202,7 +256,11 @@ The manifest ([build-aux/flatpak/](build-aux/flatpak/)) installs the script,
 the desktop entry, the AppStream metainfo and the icons from
 [data/](data/). CI builds a `.flatpak` bundle for every push and attaches it
 to releases. The app needs `--filesystem=host` because the extracted file is
-written next to the signed one, wherever that is.
+written next to the signed one, wherever that is, and `--share=network` to
+ask the trusted lists and the certifier when it checks a signature. pyHanko
+and what it needs are built in from wheels pinned by URL and SHA-256:
+`python3 tools/flatpak_wheels.py --write` writes that block of the manifest,
+and the build runs `tests/test_verify.py` with them.
 
 The app ID `io.github.daniel_g_carrasco.p7m-extractor` is derived from the
 GitHub repository, so Flathub verifies ownership through the GitHub account
@@ -219,8 +277,9 @@ output directory `site`).
 
 The code is the package `src/p7m_extractor/`, in four layers with the
 imports going one way only: `core/` (plain logic), `data/` (the .p7m
-container, bytes in and bytes out), `app/` (extraction of a file, settings,
-updates, the Windows registry; no toolkit) and `gui/` (the GTK window, the
+container, bytes in and bytes out), `app/` (extraction of a file, the check
+of its signatures, settings, updates, the Windows registry; no toolkit) and
+`gui/` (the GTK window, the
 only place `gi` is imported). `gui` uses `app`, `app` uses `core` and `data`,
 `core` and `data` know nobody. `tests/test_strati.py` reads the imports and
 fails with file, line and rule.
@@ -228,6 +287,8 @@ fails with file, line and rule.
 ```bash
 python tests/test_extract.py     # self-contained test suite, no deps
 python tests/test_strati.py      # the layers: every import goes one way
+python tests/test_verify.py      # the signatures: the words always, the checking where pyHanko is; no network
+python tools/flatpak_wheels.py --check   # the Flatpak's wheels are the pinned ones (asks PyPI)
 python tools/compile_po.py       # compile po/*.po into locale/ (needed to see translations)
 python tools/make_icon.py        # regenerate assets/icon.*, data/icons PNGs, installer bitmaps (Pillow)
 desktop-file-validate data/io.github.daniel_g_carrasco.p7m-extractor.desktop
@@ -239,10 +300,14 @@ MSYS2 on Windows; installer compiled with Inno Setup; Flatpak via
 flatpak-builder). Tagging `v*` publishes a release; the tag must match
 `__version__` in `src/p7m_extractor/__init__.py`, and the release should be listed in
 the metainfo. Most of the package size is the bundled GTK stack; CI strips
-unused locales and icon-theme variants to keep it in check.
+unused locales and icon-theme variants to keep it in check. pyHanko's version
+is written in one place, `tools/flatpak_wheels.py`, which every build asks;
+each build is then tried on a file signed by the tests' own certifier, which
+no build may call valid.
 
 Preferences are stored in `%LOCALAPPDATA%\p7m-extractor\settings.ini` on
-Windows and `$XDG_CONFIG_HOME/p7m-extractor/settings.ini` on Linux.
+Windows and `$XDG_CONFIG_HOME/p7m-extractor/settings.ini` on Linux; the
+trusted lists are kept in `trusted-lists` in the same folder.
 
 Translations live in `po/` (English source strings in the code, one `.po`
 per language). To refresh the template after changing strings:
