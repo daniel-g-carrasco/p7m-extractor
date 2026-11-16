@@ -7,24 +7,13 @@ import os
 import subprocess
 import sys
 import time
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 
 from p7m_extractor import APP_ID, APP_NAME, GITHUB_REPO, PACKAGE_DIR, __version__, _mark
-from p7m_extractor.app import verify
+from p7m_extractor.app import services, updates, verify
 from p7m_extractor.app.extract import extract_file, iter_p7m
 from p7m_extractor.app.settings import Settings, config_dir
-from p7m_extractor.app.updates import (
-    UpdateError,
-    clean_update_downloads,
-    download_file,
-    fetch_latest_release,
-    is_installed_build,
-    is_newer,
-    pick_asset,
-    update_download_folder,
-)
-from p7m_extractor.app.win32 import win_allow_foreground, win_bring_to_front, win_dark_titlebars
 from p7m_extractor.app.windows_shell import (
     win_current_handler,
     win_is_default,
@@ -32,15 +21,18 @@ from p7m_extractor.app.windows_shell import (
     win_register,
     win_unregister,
 )
+from p7m_extractor.app.winsys import win_allow_foreground, win_bring_to_front
 from p7m_extractor.cli import build_parser
-from p7m_extractor.data.cms import BerError
 from p7m_extractor.core import verdict
+from p7m_extractor.data.cms import BerError
 from p7m_extractor.i18n import _
 
 from . import signatures
 from .winquirks import win_watch_quirks
 
 # GTK 4 GUI
+
+UPDATE_RECHECK_DELAY_S = 5     # after the window comes back from the taskbar
 
 # Plain GTK 4 (Windows, or Linux without libadwaita): GTK's own named colours.
 _CSS = b"""
@@ -361,7 +353,10 @@ def run_gui(argv, settings: Settings) -> int:
             moment later, when the style has followed a change of scheme."""
             windows = Gtk.Window.list_toplevels()
             background, text = window_colours(windows[0]) if windows else (None, None)
-            win_dark_titlebars(self.dark, background, text)
+            from p7m_extractor.app import win32  # Windows only
+            win32.title_bars(self.dark, background, text)
+            if getattr(sys, "frozen", False):           # a run from the sources has no icon of its own
+                win32.window_icons(sys.executable)
             if again:
                 GLib.idle_add(lambda: self._title_bars(False) and False)
 
@@ -758,17 +753,38 @@ def run_gui(argv, settings: Settings) -> int:
 
         def first_shown(self):
             """One-shot tasks after the window is on screen (Windows only:
-            default-app prompt and the daily update check)."""
+            default-app prompt and the update check)."""
             if is_win:
-                threading.Thread(target=clean_update_downloads, daemon=True).start()
+                threading.Thread(target=updates.clean_downloads, args=(services.project(),), daemon=True).start()
                 if self.settings.get_bool("ask_default_app") and not win_is_default():
                     ask_default_app(self)
-                today = date.today().isoformat()
-                if (self.settings.get_bool("check_updates")
-                        and self.settings.get("last_update_check") != today):
-                    self.settings.set("last_update_check", today)
-                    self.check_updates(manual=False)
+                self._update_timer = 0
+                self._automatic_update_check()
+                # seen again: restored from the taskbar (GTK keeps a minimized
+                # window mapped: only `suspended` changes)
+                self.connect("notify::suspended", lambda *_args: self._came_back())
             return False  # one-shot GLib.idle_add
+
+        def _came_back(self):
+            """The window restored from the taskbar: a check, a moment later,
+            if the last one is old enough. One waiting at a time: a window
+            minimized and restored again and again makes one check at most."""
+            if not self.is_suspended() and not self._update_timer:
+                self._update_timer = GLib.timeout_add_seconds(UPDATE_RECHECK_DELAY_S,
+                                                              self._automatic_update_check)
+
+        def _automatic_update_check(self):
+            """A check made by itself: at start and when the window comes
+            back, at most every updates.CHECK_EVERY_HOURS (4). A newer
+            version is a toast with its button, never a dialog."""
+            self._update_timer = 0
+            if not self.settings.get_bool("check_updates"):
+                return False
+            now = datetime.now()
+            if updates.check_due(self.settings.get("last_update_check"), now):
+                self.settings.set("last_update_check", updates.check_stamp(now))
+                self.check_updates(manual=False)
+            return False
 
         def show_banner(self, text, button_label=None, callback=None):
             self._banner_cb = callback
@@ -811,10 +827,14 @@ def run_gui(argv, settings: Settings) -> int:
                                "signed files (.p7m, CAdES)."),
                     website=f"https://github.com/{GITHUB_REPO}",
                     issue_url=f"https://github.com/{GITHUB_REPO}/issues",
-                    license_type=Gtk.License.MIT_X11,
+                    license_type=Gtk.License.GPL_3_0,       # version 3 or later
                     copyright="© 2026 Daniel Grasso",
                     developer_name="Daniel Grasso",
                     developers=["Daniel Grasso"],
+                    # Troubleshooting: what a report of a problem needs,
+                    # with the file the window's errors go to (app/diagnostics.py)
+                    debug_info=self._debug_info(),
+                    debug_info_filename=f"{APP_ID}-debug-info.txt",
                 ).present(self)
                 return
             if self._about is None:  # built once, hidden on close
@@ -825,12 +845,25 @@ def run_gui(argv, settings: Settings) -> int:
                                "signed files (.p7m, CAdES)."),
                     website=f"https://github.com/{GITHUB_REPO}",
                     website_label=_("Project on GitHub"),
-                    license_type=Gtk.License.MIT_X11,
+                    license_type=Gtk.License.GPL_3_0,       # version 3 or later
                     copyright="© 2026 Daniel Grasso",
                     authors=["Daniel Grasso"],
                     logo_icon_name=APP_ID,
                 )
             self._about.present()
+
+        def _debug_info(self):
+            """The versions, the folders, the preferences and errors.log, in
+            the shared report's words (no secret, nothing of the files opened)."""
+            from types import SimpleNamespace
+
+            from p7m_extractor.app import diagnostics
+            s = self.settings
+            prefs = SimpleNamespace(theme=s.get("color_scheme"), language=s.get("language"),
+                                    check_updates=s.get_bool("check_updates"), notices=[])
+            toolkit = (f"GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}, "
+                       f"libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}.{Adw.get_micro_version()}")
+            return diagnostics.summary(APP_NAME, __version__, prefs, services.app_paths(), toolkit)
 
         # --- update check (Windows) -----------------------------------------
         def check_updates(self, manual):
@@ -839,8 +872,8 @@ def run_gui(argv, settings: Settings) -> int:
 
             def work():
                 try:
-                    rel = fetch_latest_release()
-                except UpdateError as e:
+                    rel = updates.latest_release(services.project())
+                except updates.UpdateError as e:
                     GLib.idle_add(self._update_result, None, str(e), manual)
                     return
                 GLib.idle_add(self._update_result, rel, None, manual)
@@ -851,14 +884,14 @@ def run_gui(argv, settings: Settings) -> int:
                 if manual:
                     self.show_banner(_("Update check failed: {error}").format(error=err))
                 return False
-            if is_newer(rel["version"]):
+            if updates.is_newer(rel.version, __version__):
                 if manual:
                     self.hide_banner()
                     UpdateDialog(self, rel).open()
                 else:
                     self.show_banner(
                         _("Version {version} of {app} is available.").format(
-                            version=rel["version"], app=APP_NAME),
+                            version=rel.version, app=APP_NAME),
                         _("Update…"), lambda: UpdateDialog(self, rel).open())
             elif manual:
                 self.show_banner(_("{app} {version} is up to date: no newer version.").format(
@@ -1245,14 +1278,14 @@ def run_gui(argv, settings: Settings) -> int:
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             set_margins(box, 24)
             heading = Gtk.Label(label=_("{app} {version} is available").format(
-                app=APP_NAME, version=rel["version"]), xalign=0.0, wrap=True)
+                app=APP_NAME, version=rel.version), xalign=0.0, wrap=True)
             heading.add_css_class("title-2")
             sub = Gtk.Label(label=_("You are using version {version}.").format(
                 version=__version__), xalign=0.0)
             sub.add_css_class("dim-label")
             box.append(heading)
             box.append(sub)
-            notes = rel["notes"].strip()
+            notes = rel.notes.strip()
             if notes:
                 lbl = Gtk.Label(label=notes[:4000], xalign=0.0, yalign=0.0,
                                 wrap=True, selectable=True, max_width_chars=56)
@@ -1270,8 +1303,11 @@ def run_gui(argv, settings: Settings) -> int:
 
             later = Gtk.Button(label=_("Later"))
             later.connect("clicked", lambda _b: self.close())
-            self.asset = pick_asset(rel["assets"], is_installed_build()) if is_win else None
-            if self.asset and is_installed_build():
+            # the installed build updates itself; the portable one and a run
+            # from the sources open the release's page
+            self._project = services.project()
+            self.asset = updates.installer_of(self._project, rel) if updates.installed_build() else None
+            if self.asset:
                 self.action = Gtk.Button(label=_("Download and install"))
                 self.action.connect("clicked", self._download)
                 self.status.set_label(_("The installation replaces the current "
@@ -1304,7 +1340,7 @@ def run_gui(argv, settings: Settings) -> int:
             return False
 
         def _open_page(self, _btn):
-            open_uri(self._rel["url"], self.get_root())     # a window, also from an AdwDialog
+            open_uri(self._rel.url, self.get_root())     # a window, also from an AdwDialog
             self.close()
 
         def _download(self, _btn):
@@ -1318,10 +1354,8 @@ def run_gui(argv, settings: Settings) -> int:
 
             def work():
                 try:
-                    dest = update_download_folder() / self.asset["name"]
-                    download_file(self.asset["url"], dest, progress, self._cancel,
-                                  sha256=self.asset.get("sha256", ""), size=self.asset.get("size", 0),
-                                  signature_url=self.asset.get("signature_url", ""))
+                    dest = updates.download_folder(self._project) / self.asset.name
+                    updates.download(self._project, self.asset, dest, progress, self._cancel)
                 except Exception as e:  # whatever it is, said: never stuck on "Downloading…"
                     GLib.idle_add(self._on_error, str(e))
                     return
@@ -1347,9 +1381,9 @@ def run_gui(argv, settings: Settings) -> int:
             self.status.set_label(_("Starting the installer…"))
             try:
                 # no wizard: the choices of the first installation are kept,
-                # Setup shows its progress and opens the app again
-                subprocess.Popen([str(dest), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH=1"],
-                                 close_fds=True)
+                # Setup shows its progress and opens the app again (/RELAUNCH=1,
+                # read by installer/p7m-extractor.iss)
+                subprocess.Popen(updates.installer_command(dest) + ["/RELAUNCH=1"], close_fds=True)
             except OSError as e:
                 self.status.set_label(_("Cannot start the installer: {error}").format(error=e))
                 self.action.set_sensitive(True)
@@ -1395,7 +1429,7 @@ def run_gui(argv, settings: Settings) -> int:
                     self._switch("ask_default_app")))
                 general.append(self._row(
                     _("Check for updates at start-up"),
-                    _("Once a day, from the project's GitHub Releases"),
+                    _("Every 4 hours at most, from the project's GitHub Releases"),
                     self._switch("check_updates")))
                 box.append(Gtk.Frame(child=general))
 
@@ -1563,7 +1597,7 @@ def run_gui(argv, settings: Settings) -> int:
                              _("Only until {app} already opens .p7m files").format(app=APP_NAME),
                              "ask_default_app"))
             group.add(switch(_("Check for updates at start-up"),
-                             _("Once a day, from the project's GitHub Releases"),
+                             _("Every 4 hours at most, from the project's GitHub Releases"),
                              "check_updates"))
             page.add(group)
 

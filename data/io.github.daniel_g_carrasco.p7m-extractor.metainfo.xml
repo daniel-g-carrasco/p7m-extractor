@@ -3,7 +3,7 @@
 <component type="desktop-application">
   <id>io.github.daniel_g_carrasco.p7m-extractor</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>MIT</project_license>
+  <project_license>GPL-3.0-or-later</project_license>
 
   <name>P7M Extractor</name>
   <summary>Extract and check signed .p7m documents</summary>
@@ -86,6 +86,14 @@
   </screenshots>
 
   <releases>
+    <release version="1.5.0" date="2026-11-16">
+      <description>
+        <p>Licence: from this version P7M Extractor is under the GNU General Public License, version 3 or later, as the author's other apps it now shares some modules with. The versions up to 1.4.0 were released under the MIT licence, and they stay so. The text of the licence comes with every build.</p>
+        <p>Windows: the check for a newer version is made at start and when the window comes back from the taskbar, every 4 hours at most.</p>
+        <p>The About window has a Troubleshooting section, to copy or save for a report of a problem: version, system, folders, settings and errors. Nothing of the files opened is in it.</p>
+        <p>The errors of the window are kept in a file, errors.log, also when the app is started from the desktop or from File Explorer. The settings are written whole or not at all, and the save is tried again when Windows holds the file for a moment.</p>
+      </description>
+    </release>
     <release version="1.4.0" date="2026-11-11">
       <description>
         <p>New: the signatures are checked. After the extraction each file says who signed it and how the check went: valid, not established (and why), not valid, or intact when there is no network. The shield on the row opens the details: who signed, the certifier, the dates of the certificate, the time of signing.</p>

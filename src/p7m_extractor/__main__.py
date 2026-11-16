@@ -5,12 +5,13 @@ from __future__ import annotations
 import os
 import sys
 
+from p7m_extractor.app import log, services
 from p7m_extractor.app.settings import Settings
 from p7m_extractor.app.windows_shell import win_register, win_unregister
 
-from . import _mark
+from . import SLUG, _mark
 from .cli import build_parser, run_check_update, run_cli, run_verify
-from .i18n import _, setup_i18n
+from .i18n import _
 
 
 def never_failing(stream) -> None:
@@ -33,7 +34,8 @@ def main() -> int:
     never_failing(sys.stderr)
 
     settings = Settings()
-    setup_i18n(settings.get("language"))
+    services.setup_language(settings.get("language"))
+    log.setup(SLUG)             # the failures said as the app says them (app/log.py)
     args = build_parser().parse_args()
 
     if args.check_update:
@@ -53,6 +55,12 @@ def main() -> int:
         return run_verify(args.paths, online=not args.offline)
     if args.paths and not args.gui:
         return run_cli(args.paths, args.overwrite)
+    from p7m_extractor.app import errorlog
+    # the window's errors kept in a file too: started from the desktop or
+    # from File Explorer nobody reads stderr, and the Windows build has no
+    # console at all (app/errorlog.py); the command line above says them
+    # in its terminal
+    errorlog.install(errorlog.log_file(services.app_paths().state))
     from p7m_extractor.gui.application import run_gui       # the toolkit, only when a window is wanted
     return run_gui(sys.argv, settings)
 

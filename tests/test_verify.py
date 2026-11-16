@@ -22,11 +22,17 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+import _setup
 
-from p7m_extractor.app import verify  # noqa: E402
-from p7m_extractor.core import verdict  # noqa: E402
-from p7m_extractor.core.verdict import FAILED, INDETERMINATE, INTEGRITY_ONLY, PASSED, Signer  # noqa: E402
+from p7m_extractor.app import verify
+from p7m_extractor.core import verdict
+from p7m_extractor.core.verdict import (
+    FAILED,
+    INDETERMINATE,
+    INTEGRITY_ONLY,
+    PASSED,
+    Signer,
+)
 
 NOW = datetime.now(timezone.utc)
 

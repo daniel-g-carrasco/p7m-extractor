@@ -16,7 +16,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: python tests/test_extract.py
-      - run: python tests/test_strati.py
+      - name: The whole suite (the common tests of the model's copies too)
+        run: python tools/run_tests.py tests
       - name: The verification of signatures, with the pyHanko the builds carry
         # tools/flatpak_wheels.py is the one place where its version is written
         run: |
@@ -86,6 +87,9 @@ jobs:
           test -f "$I/pyhanko/sign/validation/qualified/lotl-certs/latest.cert.pem"  # who signs the European list of lists
           test -f "$I/share/icons/hicolor/scalable/apps/io.github.daniel_g_carrasco.p7m-extractor.svg"
           test -f "$I/share/locale/it/LC_MESSAGES/p7m-extractor.mo"
+          test -f "$I/licenses/LICENSE"                   # the GPL travels with the program
+          test -f "$I/licenses/msys2/PACKAGES.txt"        # the MSYS2 packages, their licences and sources
+          test -f "$I/licenses/msys2/gtk4/COPYING"
       - name: Ensure GLib schemas and icon themes are bundled
         run: |
           APPDIR=dist/p7m-extractor/_internal
@@ -200,6 +204,7 @@ jobs:
           test -f dist/p7m-extractor/_internal/share/locale/it/LC_MESSAGES/p7m-extractor.mo
           test -f dist/p7m-extractor/_internal/pyhanko/sign/validation/qualified/lotl-certs/latest.cert.pem
           test -f dist/p7m-extractor/_internal/certifi/cacert.pem
+          test -f dist/p7m-extractor/_internal/licenses/LICENSE
       - name: Slim the bundle (locales and icon variants the app never loads)
         run: |
           I=dist/p7m-extractor/_internal

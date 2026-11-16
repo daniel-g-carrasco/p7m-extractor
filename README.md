@@ -12,7 +12,7 @@
   <a href="https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml">
     <img src="https://github.com/daniel-g-carrasco/p7m-extractor/actions/workflows/build.yml/badge.svg" alt="Build">
   </a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later"></a>
 </p>
 
 <p align="center"><a href="CODE_SIGNING.md">Code signing policy</a></p>
@@ -145,8 +145,9 @@ not be read.
   *Non chiedere più*). Since Windows 10 an app cannot override a default the
   user already chose, so in that case the app opens the *Default apps* page
   of Settings directly on its own entry.
-- **Updates**: menu → *Controlla aggiornamenti…*, plus an automatic daily
-  check (can be turned off in *Preferenze*). Installed builds download the
+- **Updates**: menu → *Controlla aggiornamenti…*, plus an automatic check
+  at start and when the window comes back from the taskbar, every 4 hours at
+  most (can be turned off in *Preferenze*). Installed builds download the
   new installer and launch it; the portable build is sent to the release page.
 - Everything above is per-user (`HKEY_CURRENT_USER`), also for the portable
   build; *Preferenze* → *Rimuovi* takes it all away, as does the uninstaller.
@@ -284,9 +285,22 @@ only place `gi` is imported). `gui` uses `app`, `app` uses `core` and `data`,
 `core` and `data` know nobody. `tests/test_strati.py` reads the imports and
 fails with file, line and rule.
 
+Some modules are shared with the author's other apps: `i18n.py`,
+`app/paths.py`, `app/log.py`, `app/errorlog.py`, `app/updates.py`,
+`app/minisign.py`, `app/diagnostics.py`, `app/win32.py`, `data/atomic.py`,
+their tests, `tests/test_strati.py`, `tests/_userfolders.py`,
+`tests/_ceilings.py` and `tools/run_tests.py`. They are byte-for-byte copies,
+listed with their SHA-256 in `impronte/comune.json` and held to it by
+`tests/test_impronte.py`: they are not edited here, but in the common source
+they come from, and taken again from there. They know no app: P7M
+Extractor gives them its names in `app/services.py`; its own side of the
+tests is in `tests/_setup.py`, `tests/_strati.py`, `tests/test_services.py`
+and `tools/run_tests_config.py`. No test touches the installed app's
+folders (a guard fails the run if one does) or Windows' registry.
+
 ```bash
-python tests/test_extract.py     # self-contained test suite, no deps
-python tests/test_strati.py      # the layers: every import goes one way
+python tools/run_tests.py tests  # the whole suite (the shared modules' tests too), no network
+python tests/test_extract.py     # extraction, settings, translations, icons: a script of its own
 python tests/test_verify.py      # the signatures: the words always, the checking where pyHanko is; no network
 python tools/flatpak_wheels.py --check   # the Flatpak's wheels are the pinned ones (asks PyPI)
 python tools/compile_po.py       # compile po/*.po into locale/ (needed to see translations)
@@ -318,4 +332,22 @@ Set `P7M_STARTUP_LOG=<file>` to get start-up timestamps appended to a file
 
 ## License
 
-[MIT](LICENSE) © Daniel Grasso
+GPL-3.0-or-later (the GNU General Public License, version 3 or later), see
+[LICENSE](LICENSE). © Daniel Grasso. P7M Extractor shares some of its modules
+with the author's other apps, which are under this licence; the versions up
+to 1.4.0 were released under the MIT licence, and they stay so.
+
+What the builds carry keeps its own licence, and its texts travel with it
+(the Python packages' metadata folders): pyHanko and pyhanko-certvalidator,
+asn1crypto, oscrypto, uritools, xsdata, tzlocal, attrs (MIT), cffi (MIT-0),
+cryptography (Apache-2.0 or BSD-3-Clause), lxml, pycparser, idna
+(BSD-3-Clause), signxml, tzdata, aiosignal, frozenlist, multidict, propcache,
+yarl (Apache-2.0), aiohttp (Apache-2.0 and MIT), typing-extensions,
+aiohappyeyeballs (PSF-2.0), certifi (MPL-2.0), PyGObject (LGPL-2.1-or-later),
+pycairo (LGPL-2.1 or MPL-1.1), GTK, GLib and libadwaita (LGPL-2.1-or-later).
+All of them can be combined with a program under the GPL version 3.
+
+The text of the GPL is in `licenses/` of every build. The Windows builds
+take their native libraries from [MSYS2](https://www.msys2.org): their
+licence texts are in `_internal/licenses/msys2`, and `PACKAGES.txt` there
+names each package with its version, licence and source archive.

@@ -9,26 +9,36 @@ import sys
 from pathlib import Path
 
 from p7m_extractor import __version__
+from p7m_extractor.app import services
 from p7m_extractor.app.extract import extract_file, iter_p7m
-from p7m_extractor.app.updates import UpdateError, fetch_latest_release, is_newer
 from p7m_extractor.data.cms import BerError
 
 from .i18n import _
 
 
+def answered(error: Exception) -> bool:
+    """Whether GitHub answered at all (an HTTP error, an answer that is not
+    a release), against the network or TLS failing: the shared updates.py
+    raises UpdateError for both, from the error underneath."""
+    import urllib.error
+    cause = error.__context__
+    return isinstance(cause, urllib.error.HTTPError) or not isinstance(cause, (OSError, ValueError))
+
+
 def run_check_update() -> int:
     """`--check-update`: print the latest release. Exit 0 when GitHub answered
     (up to date or not), 3 when the network/TLS layer failed."""
+    from p7m_extractor.app import updates
     print(_("Installed version: {version}").format(version=__version__))
     try:
-        rel = fetch_latest_release()
-    except UpdateError as e:
+        rel = updates.latest_release(services.project())
+    except updates.UpdateError as e:
         print(_("Update check failed: {error}").format(error=e), file=sys.stderr)
-        return 0 if e.reached else 3
-    if is_newer(rel["version"]):
-        print(_("Available: {version}  ({url})").format(version=rel["version"], url=rel["url"]))
+        return 0 if answered(e) else 3
+    if updates.is_newer(rel.version, __version__):
+        print(_("Available: {version}  ({url})").format(version=rel.version, url=rel.url))
     else:
-        print(_("Latest version: {version} (up to date)").format(version=rel["version"]))
+        print(_("Latest version: {version} (up to date)").format(version=rel.version))
     return 0
 
 
@@ -68,7 +78,6 @@ def run_verify(paths, online: bool) -> int:
     was checked, without the network), 1 when a signature is wrong or a file
     could not be read."""
     from p7m_extractor.app import verify
-    from p7m_extractor.app.settings import config_dir
     from p7m_extractor.core import verdict
 
     files = iter_p7m(paths)
@@ -78,7 +87,7 @@ def run_verify(paths, online: bool) -> int:
     if not verify.available():
         print(_("This build cannot verify signatures: the pyHanko library is missing."), file=sys.stderr)
         return 1
-    lists = config_dir() / "trusted-lists"
+    lists = services.app_paths().trusted_lists
     states = set()
     for f in files:
         print(f)

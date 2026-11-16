@@ -136,6 +136,7 @@ modules:
       - install -d /app/share/p7m-extractor
       - cp -r src/p7m_extractor /app/share/p7m-extractor/p7m_extractor
       - install -Dm755 bin/p7m-extractor /app/bin/p7m-extractor
+      - install -Dm644 LICENSE -t /app/share/licenses/io.github.daniel_g_carrasco.p7m-extractor
       # the wheels above do load on the runtime's Python, and the checks pass with them
       - python3 -c "import sys; sys.path.insert(0, 'src'); from p7m_extractor.app import verify; sys.exit(0 if verify.available() else 'pyHanko does not load')"
       - python3 tests/test_verify.py

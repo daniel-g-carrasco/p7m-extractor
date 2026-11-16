@@ -23,6 +23,10 @@ if os.path.isdir(LOCALE_DIR):
 else:
     print('WARNING: locale/ missing: run tools/compile_po.py first (UI will be English only)')
 
+# The GPL wants its text with the program: in licenses/ of the bundle, so in
+# the installer, the zip and the tar.gz alike.
+datas.append((os.path.join(SPECPATH, 'LICENSE'), 'licenses'))
+
 if WIN:
     prefix = Path(sys.prefix)  # MSYS2: C:/msys64/ucrt64 (the one with libadwaita)
 
@@ -92,6 +96,61 @@ a = Analysis(
     hiddenimports=hidden,
     hooksconfig={'gi': {'module-versions': GI_VERSIONS}},
 )
+
+
+
+def msys2_licences(toc, root):
+    """Windows: the licence texts of the MSYS2 packages the bundle takes files
+    from, and licenses/msys2/PACKAGES.txt with each package's version, licence
+    and source archive. The owner of each file is read from pacman's database."""
+    db = root / 'var' / 'lib' / 'pacman' / 'local'
+    if not db.is_dir():
+        print(f'WARNING: no pacman database in {db}: the MSYS2 licences are not bundled')
+        return []
+    owner, packages = {}, {}
+    for entry in db.iterdir():
+        try:
+            desc = (entry / 'desc').read_text(encoding='utf-8').split('\n\n')
+            names = (entry / 'files').read_text(encoding='utf-8').split('%FILES%\n', 1)[1].split('\n\n')[0].split('\n')
+        except (OSError, IndexError):
+            continue
+        fields = {block.split('\n')[0]: block.split('\n')[1:] for block in desc if block.startswith('%')}
+        packages[entry.name] = fields, [n for n in names if '/share/licenses/' in n and not n.endswith('/')]
+        for name in names:
+            if name.startswith(('ucrt64/', 'mingw64/')) and not name.endswith('/'):
+                owner[name.lower()] = entry.name
+    used = set()
+    for _dest, source, _kind in toc:
+        try:
+            relative = Path(source).resolve().relative_to(root.resolve()).as_posix().lower()
+        except (ValueError, OSError):
+            continue
+        if relative in owner:
+            used.add(owner[relative])
+    entries, lines = [], ['MSYS2 packages the bundle takes files from (https://www.msys2.org).',
+                          'Their licence texts are in this folder; the sources of each version are',
+                          'at the address given (and in https://github.com/msys2/MINGW-packages).', '']
+    for package in sorted(used):
+        fields, licences = packages[package]
+        name, version = fields['%NAME%'][0], fields['%VERSION%'][0]
+        base = (fields.get('%BASE%') or [name])[0]
+        lines += [f'{name} {version}', f'  licence: {" ".join(fields.get("%LICENSE%", ["?"]))}',
+                  f'  source: https://repo.msys2.org/mingw/sources/{base}-{version}.src.tar.zst', '']
+        for licence in licences:
+            path = root / licence
+            if path.is_file():
+                inner = licence.split('/share/licenses/', 1)[1]
+                entries.append((f'licenses/msys2/{inner}', str(path), 'DATA'))
+    listing = Path(workpath) / 'PACKAGES.txt'
+    listing.parent.mkdir(parents=True, exist_ok=True)
+    listing.write_text('\n'.join(lines), encoding='utf-8', newline='\n')
+    entries.append(('licenses/msys2/PACKAGES.txt', str(listing), 'DATA'))
+    print(f'NOTE: licences of {len(used)} MSYS2 packages bundled ({len(entries) - 1} files)')
+    return entries
+
+
+if WIN:
+    a.datas += msys2_licences(a.binaries + a.datas, prefix.parent)
 
 pyz = PYZ(a.pure)
 

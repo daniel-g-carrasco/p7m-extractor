@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 import configparser
-import os
-import sys
+import io
 from pathlib import Path
+
+from p7m_extractor.data import atomic
+
+from . import services
 
 
 def config_dir() -> Path:
-    """Per-user configuration directory, following platform conventions:
-    $XDG_CONFIG_HOME on Linux (Flatpak points it inside the sandbox),
-    %LOCALAPPDATA% on Windows."""
-    if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    else:
-        base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "p7m-extractor"
+    """Per-user configuration directory (app/services.py): %LOCALAPPDATA%\\
+    p7m-extractor on Windows, $XDG_CONFIG_HOME/p7m-extractor elsewhere
+    (Flatpak points it inside the sandbox)."""
+    return services.app_paths().config
 
 
 class Settings:
@@ -28,13 +27,15 @@ class Settings:
         # Windows: the system title bar (and so Snap) rather than GTK's
         "system_title_bar": "true",
         "ask_default_app": "true",     # Windows: offer to become the .p7m handler
-        "check_updates": "true",       # Windows: look for a new release daily
+        "check_updates": "true",       # Windows: look for a new release, every 4 hours at most
         "verify_signatures": "true",   # check who signed and whether the signature holds (uses the network)
-        "last_update_check": "",       # ISO date of the last automatic check
+        # when the last check made on its own was (updates.check_stamp); a
+        # date alone, as the once-a-day check wrote it, is that day's midnight
+        "last_update_check": "",
     }
 
     def __init__(self, path: Path | None = None):
-        self.path = Path(path) if path else config_dir() / "settings.ini"
+        self.path = Path(path) if path else services.app_paths().config_file
         self._cp = configparser.ConfigParser()
         self._cp["general"] = dict(self.DEFAULTS)
         try:
@@ -55,9 +56,13 @@ class Settings:
         self.save()
 
     def save(self) -> None:
+        """Written whole or not at all (data/atomic.py: a temporary file
+        renamed over the old one, the rename tried again for a moment when
+        Windows refuses it, an antivirus or the indexer holding the file
+        just written)."""
+        text = io.StringIO()
+        self._cp.write(text)
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path, "w", encoding="utf-8") as f:
-                self._cp.write(f)
+            atomic.write_bytes(self.path, text.getvalue().encode("utf-8"))
         except OSError:
             pass  # preferences are a convenience, never fatal

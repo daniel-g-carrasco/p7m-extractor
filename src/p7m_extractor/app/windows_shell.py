@@ -11,7 +11,11 @@ from pathlib import Path
 from p7m_extractor import APP_NAME, PACKAGE_DIR, PROGID, WIN_VERB
 from p7m_extractor.i18n import _
 
-from .updates import is_frozen
+
+def is_frozen() -> bool:
+    """The built app (PyInstaller), not a run from the sources."""
+    return bool(getattr(sys, "frozen", False))
+
 
 # The installer writes the same keys (HKLM when installed for all users);
 # these functions cover the portable build and the in-app "set as default".
