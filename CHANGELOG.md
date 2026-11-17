@@ -4,7 +4,7 @@ What changes for the user from one version to the next. The notes of the
 versions up to 1.4.0 are on the
 [releases page](https://github.com/daniel-g-carrasco/p7m-extractor/releases).
 
-## [Unreleased]
+## [1.5.1] - 2026-11-17
 
 ### Changed
 - A new icon, in the style now shared by the apps of the same family (Scriba, Meridiana and the others): a red wax seal with two straight ribbons on a blue canvas,
