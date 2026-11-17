@@ -304,7 +304,7 @@ python tests/test_extract.py     # extraction, settings, translations, icons: a 
 python tests/test_verify.py      # the signatures: the words always, the checking where pyHanko is; no network
 python tools/flatpak_wheels.py --check   # the Flatpak's wheels are the pinned ones (asks PyPI)
 python tools/compile_po.py       # compile po/*.po into locale/ (needed to see translations)
-python tools/make_icon.py        # regenerate assets/icon.*, data/icons PNGs, installer bitmaps (Pillow)
+python tools/make_icon.py        # regenerate assets/icon.*, data/icons PNGs, installer bitmaps from the SVG (GdkPixbuf, Pillow)
 desktop-file-validate data/io.github.daniel_g_carrasco.p7m-extractor.desktop
 appstreamcli validate --no-net data/io.github.daniel_g_carrasco.p7m-extractor.metainfo.xml
 ```

@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- P7M Extractor symbolic icon. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <!-- Monochrome, on the 16 px grid: a document with a folded corner and a
-       seal with a check mark, one pixel of clearance between the two. Fills
-       only, because GTK recolours symbolic icons through the fill property.
-       Keep the header short: gdk-pixbuf only looks for <svg> in the first
-       256 bytes, and flatpak-builder rejects icons it cannot load. -->
-  <path fill="#2e3436" fill-rule="evenodd" d="M1 1H7L10 4V6.21A5.5 5.5 0 0 0 7.26 15H1ZM2 2H6V5H9V6.6A5.5 5.5 0 0 0 6.6 14H2Z"/>
-  <path fill="#2e3436" fill-rule="evenodd" d="M7 11.5a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0 -9 0ZM8.33 12.17L10.6 14.43L14.67 10.37L13.53 9.23L10.6 12.17L9.47 11.03Z"/>
+  <!-- The symbolic icon: filled shapes only. -->
+  <path fill="#2e3436" fill-rule="evenodd" d="M 6.99 4.97 L 3.43 14.77 L 4.91 13.82 L 5.44 15.5 L 9.01 5.71 Z M 6.99 5.71 L 10.56 15.5 L 11.09 13.82 L 12.57 14.77 L 9.01 4.97 Z M 8 0.5 L 8 0.5 L 8 10.18 L 8 10.18 L 7.37 10.14 L 6.75 10.01 L 6.15 9.81 L 5.58 9.53 L 5.05 9.18 L 4.58 8.76 L 4.16 8.29 L 3.81 7.76 L 3.53 7.19 L 3.33 6.59 L 3.2 5.97 L 3.16 5.34 L 3.2 4.71 L 3.33 4.09 L 3.53 3.49 L 3.81 2.92 L 4.16 2.39 L 4.58 1.92 L 5.05 1.5 L 5.58 1.15 L 6.15 0.87 L 6.75 0.66 L 7.37 0.54 Z M 8 0.5 L 8 0.5 L 8.63 0.54 L 9.25 0.66 L 9.85 0.87 L 10.42 1.15 L 10.95 1.5 L 11.42 1.92 L 11.84 2.39 L 12.19 2.92 L 12.47 3.49 L 12.67 4.09 L 12.8 4.71 L 12.84 5.34 L 12.8 5.97 L 12.67 6.59 L 12.47 7.19 L 12.19 7.76 L 11.84 8.29 L 11.42 8.76 L 10.95 9.18 L 10.42 9.53 L 9.85 9.81 L 9.25 10.01 L 8.63 10.14 L 8 10.18 L 8 10.18 Z"/>
 </svg>
