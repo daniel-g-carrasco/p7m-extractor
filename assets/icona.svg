@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="512" height="512" viewBox="0 0 512 512" version="1.1" id="svg1"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview id="namedview1" pagecolor="#ffffff" bordercolor="#000000" borderopacity="0.25" inkscape:showpageshadow="2" inkscape:pageopacity="0.0" inkscape:pagecheckerboard="0" inkscape:deskcolor="#d1d1d1" inkscape:document-units="px" showguides="true" inkscape:zoom="1" inkscape:cx="256" inkscape:cy="256" inkscape:current-layer="soggetto">
+    <sodipodi:guide position="256,256" orientation="1,0" inkscape:label="centro" />
+    <sodipodi:guide position="256,264" orientation="0,1" inkscape:label="centro della faccia" />
+  </sodipodi:namedview>
+  <defs id="defs1">
+    <linearGradient id="sfumatura-tela" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9cfe0"/><stop offset="1" stop-color="#86b9cf"/></linearGradient>
+    <linearGradient id="sfumatura-fianco" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7398a8"/><stop offset="0.0625" stop-color="#7197a7"/><stop offset="0.125" stop-color="#6f95a5"/><stop offset="0.1875" stop-color="#6b92a2"/><stop offset="0.25" stop-color="#678e9f"/><stop offset="0.3125" stop-color="#628b9c"/><stop offset="0.375" stop-color="#5e8799"/><stop offset="0.4375" stop-color="#5b8597"/><stop offset="0.5" stop-color="#5a8496"/><stop offset="0.5625" stop-color="#5b8597"/><stop offset="0.625" stop-color="#5e8799"/><stop offset="0.6875" stop-color="#628b9c"/><stop offset="0.75" stop-color="#678e9f"/><stop offset="0.8125" stop-color="#6b92a2"/><stop offset="0.875" stop-color="#6f95a5"/><stop offset="0.9375" stop-color="#7197a7"/><stop offset="1" stop-color="#7398a8"/></linearGradient>
+  </defs>
+  <g inkscape:groupmode="layer" id="sfondo" inkscape:label="Tela (bloccata)" sodipodi:insensitive="true">
+    <path id="fianco-copiato" style="fill:url(#sfumatura-fianco)" d="M 108 32 H 404 A 84 84 0 0 1 488 116 V 412 A 84 84 0 0 1 404 496 H 108 A 84 84 0 0 1 24 412 V 116 A 84 84 0 0 1 108 32 Z" />
+    <path id="faccia" style="fill:url(#sfumatura-tela)" d="M 108 16 H 404 A 84 84 0 0 1 488 100 V 396 A 84 84 0 0 1 404 480 H 108 A 84 84 0 0 1 24 396 V 100 A 84 84 0 0 1 108 16 Z" />
+  </g>
+  <g inkscape:groupmode="layer" id="soggetto" inkscape:label="Soggetto">
+      <path style="fill:#D2603F;stroke:#D2603F;stroke-width:0.8;stroke-linejoin:round" d="M 235.89 187.47 L 164.59 383.36 L 194.25 364.44 L 204.81 398 L 276.11 202.11 Z" />
+      <path style="fill:#9E412C;stroke:#9E412C;stroke-width:0.8;stroke-linejoin:round" d="M 235.89 202.11 L 307.19 398 L 317.75 364.44 L 347.41 383.36 L 276.11 187.47 Z" />
+      <path style="fill:#D2603F;stroke:#D2603F;stroke-width:0.8;stroke-linejoin:round" d="M 256 98 L 256 98 L 256 291.57 L 256 291.57 L 243.37 290.75 L 230.95 288.28 L 218.96 284.21 L 207.61 278.61 L 197.08 271.57 L 187.56 263.23 L 179.21 253.71 L 172.18 243.18 L 166.58 231.83 L 162.51 219.84 L 160.04 207.42 L 159.21 194.79 L 160.04 182.15 L 162.51 169.74 L 166.58 157.75 L 172.18 146.39 L 179.21 135.87 L 187.56 126.35 L 197.08 118 L 207.61 110.97 L 218.96 105.37 L 230.95 101.3 L 243.37 98.83 Z" />
+      <path style="fill:#9E412C;stroke:#9E412C;stroke-width:0.8;stroke-linejoin:round" d="M 256 98 L 256 98 L 268.63 98.83 L 281.05 101.3 L 293.04 105.37 L 304.39 110.97 L 314.92 118 L 324.44 126.35 L 332.79 135.87 L 339.82 146.39 L 345.42 157.75 L 349.49 169.74 L 351.96 182.15 L 352.79 194.79 L 351.96 207.42 L 349.49 219.84 L 345.42 231.83 L 339.82 243.18 L 332.79 253.71 L 324.44 263.23 L 314.92 271.57 L 304.39 278.61 L 293.04 284.21 L 281.05 288.28 L 268.63 290.75 L 256 291.57 L 256 291.57 Z" />
+  </g>
+</svg>

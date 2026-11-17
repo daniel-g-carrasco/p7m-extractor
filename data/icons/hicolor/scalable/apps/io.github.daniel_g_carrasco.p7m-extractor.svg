@@ -1,28 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- P7M Extractor application icon (same design as tools/make_icon.py,
-     on the 128 px GNOME icon grid). -->
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <!-- blue tile -->
-  <rect x="8" y="8" width="112" height="112" rx="22.5" fill="#1a5fb4"/>
-  <!-- document sheet with folded top-right corner -->
-  <path d="M35 25H78L93 40V103H35Z" fill="#ffffff"/>
-  <path d="M78 25V40H93Z" fill="#103e78"/>
-  <!-- text lines -->
-  <g fill="#a0afc3">
-    <rect x="43.75" y="41.25" width="40.5" height="3.75" rx="1.875"/>
-    <rect x="43.75" y="50.25" width="33" height="3.75" rx="1.875"/>
-    <rect x="43.75" y="59.25" width="40.5" height="3.75" rx="1.875"/>
-    <rect x="43.75" y="68.25" width="33" height="3.75" rx="1.875"/>
-    <rect x="43.75" y="77.25" width="40.5" height="3.75" rx="1.875"/>
-  </g>
-  <!-- ribbon tails -->
-  <g fill="#8c121c">
-    <path d="M75 100L63.75 126.25L78.75 120L82.5 105Z"/>
-    <path d="M90 100L101.25 126.25L86.25 120L82.5 105Z"/>
-  </g>
-  <!-- wax seal with check mark -->
-  <circle cx="82.5" cy="95" r="18.75" fill="#c01c28"/>
-  <circle cx="82.5" cy="95" r="13.375" fill="none" stroke="#ffffff" stroke-width="2.25"/>
-  <path d="M74.75 95.5L80.75 101.5L90.75 89.25" fill="none" stroke="#ffffff"
-        stroke-width="3.75" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- P7M Extractor's icon on the square canvas of the family; the Inkscape master is p7m-extractor-icona.svg, the PNG sizes and the .ico are made from this file. -->
+  <defs>
+    <linearGradient id="sfumatura-tela" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9cfe0"/><stop offset="1" stop-color="#86b9cf"/></linearGradient>
+    <linearGradient id="sfumatura-fianco" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7398a8"/><stop offset="0.0625" stop-color="#7197a7"/><stop offset="0.125" stop-color="#6f95a5"/><stop offset="0.1875" stop-color="#6b92a2"/><stop offset="0.25" stop-color="#678e9f"/><stop offset="0.3125" stop-color="#628b9c"/><stop offset="0.375" stop-color="#5e8799"/><stop offset="0.4375" stop-color="#5b8597"/><stop offset="0.5" stop-color="#5a8496"/><stop offset="0.5625" stop-color="#5b8597"/><stop offset="0.625" stop-color="#5e8799"/><stop offset="0.6875" stop-color="#628b9c"/><stop offset="0.75" stop-color="#678e9f"/><stop offset="0.8125" stop-color="#6b92a2"/><stop offset="0.875" stop-color="#6f95a5"/><stop offset="0.9375" stop-color="#7197a7"/><stop offset="1" stop-color="#7398a8"/></linearGradient>
+  </defs>
+  <path fill="url(#sfumatura-fianco)" d="M 108 32 H 404 A 84 84 0 0 1 488 116 V 412 A 84 84 0 0 1 404 496 H 108 A 84 84 0 0 1 24 412 V 116 A 84 84 0 0 1 108 32 Z"/>
+  <path fill="url(#sfumatura-tela)" d="M 108 16 H 404 A 84 84 0 0 1 488 100 V 396 A 84 84 0 0 1 404 480 H 108 A 84 84 0 0 1 24 396 V 100 A 84 84 0 0 1 108 16 Z"/>
+  <path fill="#D2603F" stroke="#D2603F" stroke-width="0.8" stroke-linejoin="round" d="M 235.89 187.47 L 164.59 383.36 L 194.25 364.44 L 204.81 398 L 276.11 202.11 Z"/>
+  <path fill="#9E412C" stroke="#9E412C" stroke-width="0.8" stroke-linejoin="round" d="M 235.89 202.11 L 307.19 398 L 317.75 364.44 L 347.41 383.36 L 276.11 187.47 Z"/>
+  <path fill="#D2603F" stroke="#D2603F" stroke-width="0.8" stroke-linejoin="round" d="M 256 98 L 256 98 L 256 291.57 L 256 291.57 L 243.37 290.75 L 230.95 288.28 L 218.96 284.21 L 207.61 278.61 L 197.08 271.57 L 187.56 263.23 L 179.21 253.71 L 172.18 243.18 L 166.58 231.83 L 162.51 219.84 L 160.04 207.42 L 159.21 194.79 L 160.04 182.15 L 162.51 169.74 L 166.58 157.75 L 172.18 146.39 L 179.21 135.87 L 187.56 126.35 L 197.08 118 L 207.61 110.97 L 218.96 105.37 L 230.95 101.3 L 243.37 98.83 Z"/>
+  <path fill="#9E412C" stroke="#9E412C" stroke-width="0.8" stroke-linejoin="round" d="M 256 98 L 256 98 L 268.63 98.83 L 281.05 101.3 L 293.04 105.37 L 304.39 110.97 L 314.92 118 L 324.44 126.35 L 332.79 135.87 L 339.82 146.39 L 345.42 157.75 L 349.49 169.74 L 351.96 182.15 L 352.79 194.79 L 351.96 207.42 L 349.49 219.84 L 345.42 231.83 L 339.82 243.18 L 332.79 253.71 L 324.44 263.23 L 314.92 271.57 L 304.39 278.61 L 293.04 284.21 L 281.05 288.28 L 268.63 290.75 L 256 291.57 L 256 291.57 Z"/>
 </svg>
