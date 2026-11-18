@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-__version__ = "1.5.1"
+__version__ = "1.5.2"
 
 WINDOWS = sys.platform == "win32"
 
@@ -38,7 +38,7 @@ EXE_NAME = "p7m-extractor"          # the Windows executable (p7m-extractor.exe)
 TEXTDOMAIN = SLUG
 ENV_PREFIX = "P7M"                  # the developer aids: P7M_STARTUP_LOG and the like
 GITHUB_REPO = "daniel-g-carrasco/p7m-extractor"
-WEBSITE = f"https://github.com/{GITHUB_REPO}"
+WEBSITE = "https://p7m.neistar.com"
 RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
 DOWNLOADS_URL = f"https://github.com/{GITHUB_REPO}/releases/download/"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"

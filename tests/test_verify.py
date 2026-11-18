@@ -22,7 +22,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import _setup
+import _setup  # noqa: F401 - sets up imports and isolated folders
 
 from p7m_extractor.app import verify
 from p7m_extractor.core import verdict

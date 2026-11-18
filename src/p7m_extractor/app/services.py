@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from p7m_extractor import (
@@ -35,12 +36,11 @@ LANGUAGES = ("en", "it")
 AUTOMATIC = "auto"
 
 
+@dataclass(frozen=True)
 class Folders(Paths):
     """The shared folders, with P7M Extractor's files in them."""
 
-    @property
-    def config_file(self) -> Path:
-        return self.config / "settings.ini"
+    config_name: str = "settings.ini"
 
     @property
     def trusted_lists(self) -> Path:
@@ -55,12 +55,8 @@ def app_paths(environ=None) -> Folders:
     and the trusted lists; state, data and cache in folders under it),
     elsewhere the XDG folders named by the slug (~/.config/p7m-extractor).
     The XDG variables still win on Windows, for the tests."""
-    environ = os.environ if environ is None else environ
-    if WINDOWS and not environ.get("XDG_CONFIG_HOME"):
-        local = Path(environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / SLUG
-        return Folders(config=local, state=local / "state", data=local / "data", cache=local / "cache")
-    shared = Paths.from_env(SLUG, EXE_NAME, environ)
-    return Folders(shared.config, shared.state, shared.data, shared.cache)
+    return Folders.from_env(SLUG, EXE_NAME, environ, windows_local_config=True,
+                            config_name=Folders.config_name)
 
 
 def project():
@@ -91,9 +87,6 @@ def setup_language(choice: str = AUTOMATIC) -> str:
     """The catalogue for `choice` ("auto", "it" or "en"), and the language
     in use. Must run before any text the user sees is made."""
     language = choice if choice in LANGUAGES else desktop_language()
-    if WINDOWS or choice in LANGUAGES:
-        # GTK's own strings (the buttons of a dialog, the file chooser) come
-        # from libintl, which reads LANGUAGE: kept in step with ours
-        os.environ["LANGUAGE"] = language
-    i18n.setup(TEXTDOMAIN, PACKAGE_DIR.parent.parent, language)
+    i18n.setup(TEXTDOMAIN, PACKAGE_DIR.parent.parent, language,
+               toolkit=WINDOWS or choice in LANGUAGES)
     return language

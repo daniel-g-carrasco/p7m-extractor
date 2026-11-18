@@ -11,7 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import _setup
+import _setup  # noqa: F401 - sets up imports and isolated folders
 
 import p7m_extractor
 from p7m_extractor import cli
@@ -147,8 +147,8 @@ def main() -> int:
     import compile_po
     root = Path(compile_po.ROOT)
     with tempfile.TemporaryDirectory() as td:
-        written = compile_po.compile_all(root / "po", Path(td))
-        assert [lang for lang, _count, _out in written] == ["it"]
+        written = compile_po.compile_all(Path(td), python=True, root=root)
+        assert written == [Path(td) / "it" / "LC_MESSAGES" / f"{p7m_extractor.TEXTDOMAIN}.mo"]
         import gettext
         it = gettext.translation(p7m_extractor.TEXTDOMAIN, td, languages=["it"])
         assert it.gettext("Queued") == "In coda"
@@ -159,8 +159,8 @@ def main() -> int:
     import re
     source = re.sub(r'"\s*\n\s*"', "", "\n".join(p.read_text(encoding="utf-8")
                                                     for p in sorted((root / "src" / "p7m_extractor").rglob("*.py"))))
-    entries = compile_po.parse_po(root / "po" / "it.po")
-    missing = [m for m in entries if m and m not in source]
+    entries = compile_po.parse((root / "po" / "it.po").read_text(encoding="utf-8"))
+    missing = [e["msgid"] for e in entries if e["msgid"] and e["msgid"] not in source]
     assert not missing, f"msgids not found in the source: {missing[:5]}"
     assert services.desktop_language() in services.LANGUAGES
 

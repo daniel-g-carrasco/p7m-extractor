@@ -40,3 +40,24 @@ _userfolders.watch(SLUG, EXE_NAME)
 _userfolders.isolate()
 
 os.environ.setdefault("LANGUAGE", "en")        # the tests read the source strings
+def gtk_or_skip():
+    """GTK 4 and libadwaita with a display, or unittest.SkipTest: the
+    dialog tests run where they can (the CI's xvfb job, Windows), and say
+    why not elsewhere. GTK sets the user's locale on init: it is put back,
+    so that the other tests read numbers as in C."""
+    import locale
+    import unittest
+    before = locale.setlocale(locale.LC_ALL)
+    try:
+        import gi
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+        from gi.repository import Adw, Gdk, Gtk
+    except (ImportError, ValueError):
+        raise unittest.SkipTest("GTK 4 and libadwaita") from None
+    initialised = Gtk.init_check()
+    locale.setlocale(locale.LC_ALL, before)
+    if not initialised or Gdk.Display.get_default() is None:
+        raise unittest.SkipTest("no display")
+    Adw.init()
+    return Gtk, Adw

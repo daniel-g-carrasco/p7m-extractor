@@ -89,6 +89,14 @@ def shared_modules(root: Path = ROOT) -> set[str]:
                 if not (p.name == "__init__.py" and len(p.relative_to(src).parts) <= 2)}
     prefix = f"src/{src.name}/"
     out = set()
+    # A toolkit library's source lives in its sample, without a manifest
+    # pointing back to itself. Its internal imports obey the same closure
+    # rules as an adopted library. These are libraries below gui/, not debts.
+    for folder in getattr(_strati, 'GUI_KITS', ()):
+        path = src / folder
+        if not path.is_relative_to(src / 'gui'):
+            raise ValueError('GUI_KITS must be below gui/')
+        out.update(p.relative_to(src).as_posix() for p in path.rglob('*.py'))
     folder = root / "impronte"
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else ():
         if path.name == "locali.json":
@@ -244,7 +252,8 @@ class Layers(unittest.TestCase):
             self.assertEqual(sorted(name for name, why in GUI_WITHOUT_TOOLKIT.items() if not str(why).strip()), [],
                              "GUI_WITHOUT_TOOLKIT: say why each one stays in gui")
         frozen = set(GUI_WITHOUT_TOOLKIT)
-        found = gui_without_toolkit(src, TOOLKIT, package_name(src)) - values
+        libraries = {p for p in shared_modules() if p.startswith('gui/')}
+        found = gui_without_toolkit(src, TOOLKIT, package_name(src)) - values - libraries
         self.assertEqual(sorted(found - frozen), [],
                          "gui modules without the toolkit: plain logic belongs in core, data or app")
         self.assertEqual(sorted(frozen - found), [], "moved or gone: take these out of GUI_WITHOUT_TOOLKIT")

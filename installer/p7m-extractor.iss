@@ -103,7 +103,7 @@ Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueNa
 ; the profile of the user running Setup (with UAC approval that is still the
 ; same user; only elevation with another administrator's account would land
 ; the setting in that other profile, which is harmless).
-Filename: "{localappdata}\p7m-extractor\settings.ini"; Section: "general"; Key: "language"; String: "{code:AppLanguage}"
+Filename: "{localappdata}\p7m-extractor\settings.ini"; Section: "general"; Key: "language"; String: "{code:AppLanguage}"; Flags: createkeyifdoesntexist
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{localappdata}\p7m-extractor"
@@ -114,14 +114,15 @@ Filename: "{app}\p7m-extractor.exe"; Parameters: "--unregister"; RunOnceId: "Unr
 
 [Run]
 Filename: "{app}\p7m-extractor.exe"; Description: "{cm:LaunchProgram,P7M Extractor}"; Flags: nowait postinstall skipifsilent
-; an update from the app itself (/SILENT /RELAUNCH=1): the app opens again,
+; an update from the app itself (/SILENT /RESTARTAPP=1 or the older /RELAUNCH=1): the app opens again,
 ; as the user who runs it also when Setup runs as administrator
-Filename: "{app}\p7m-extractor.exe"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
+Filename: "{app}\p7m-extractor.exe"; Flags: nowait runasoriginaluser skipifnotsilent; Check: RelaunchAfterUpdate
 
 [Code]
 function RelaunchAfterUpdate(): Boolean;
 begin
-  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+  Result := (ExpandConstant('{param:RESTARTAPP|0}') = '1') or
+            (ExpandConstant('{param:RELAUNCH|0}') = '1');
 end;
 
 function AppLanguage(Param: String): String;

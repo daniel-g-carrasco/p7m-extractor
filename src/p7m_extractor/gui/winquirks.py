@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ctypes
+from ctypes import wintypes
+
 
 def win_watch_quirks(win) -> None:
     """Two quirks of GTK 4.24 on Windows, worked around per window, and the
@@ -71,3 +74,25 @@ def win_watch_quirks(win) -> None:
     win.connect("notify::suspended", on_suspended)
     if win.is_maximized():
         on_maximized(win, None)
+
+
+def hwnd_of(window) -> int:
+    """The HWND of this exact surface, also when GdkWin32 has no typelib."""
+    surface = window.get_surface()
+    if surface is None:
+        return 0
+    try:
+        import gi
+        gi.require_version("GdkWin32", "4.0")
+        from gi.repository import GdkWin32
+        return int(GdkWin32.Win32Surface.get_handle(surface) or 0)
+    except (ImportError, ValueError, AttributeError):
+        # Frozen GTK may omit GdkWin32's typelib. Read this surface's pointer,
+        # never another window with a matching title (Preferences can repeat).
+        get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
+        get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        get_pointer.restype = ctypes.c_void_p
+        gtk = ctypes.CDLL("libgtk-4-1.dll")
+        gtk.gdk_win32_surface_get_handle.argtypes = [ctypes.c_void_p]
+        gtk.gdk_win32_surface_get_handle.restype = wintypes.HWND
+        return int(gtk.gdk_win32_surface_get_handle(get_pointer(surface.__gpointer__, None)) or 0)

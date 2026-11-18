@@ -4,6 +4,16 @@ What changes for the user from one version to the next. The notes of the
 versions up to 1.4.0 are on the
 [releases page](https://github.com/daniel-g-carrasco/p7m-extractor/releases).
 
+## [1.5.2] - 2026-11-18
+
+### Changed
+
+- Secondary windows on Windows use the system title bar.
+- The new update window shows what changed, with Italian notes when the app is in Italian.
+- Preferences and Signatures use the same layout and spacing as the other windows.
+- The packages include licence notices for the bundled libraries. The release offers the corresponding sources alongside the downloads.
+- The Windows installer and portable package are smaller.
+
 ## [1.5.1] - 2026-11-17
 
 ### Changed

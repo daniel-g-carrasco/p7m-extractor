@@ -37,6 +37,9 @@ modules:
   # Nothing is fetched while building beyond these files.
   - name: python3-pyhanko
     buildsystem: simple
+    build-options:
+      strip: false
+      no-debuginfo: true
     build-commands:
       # --ignore-installed: the Sdk has some of these (lxml) and pip would
       # leave them out, but the Platform the app runs on does not
@@ -156,5 +159,6 @@ modules:
         path: ../..
         skip:
           - .git
+          - .gpt-avanzamento
           - dist
           - build

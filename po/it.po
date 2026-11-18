@@ -193,9 +193,6 @@ msgstr "Sovrascrivi i file già esistenti"
 msgid "Extracts the original document from digitally signed files (.p7m, CAdES)."
 msgstr "Estrae il documento originale dai file firmati digitalmente (.p7m, CAdES)."
 
-msgid "Project on GitHub"
-msgstr "Progetto su GitHub"
-
 msgid "Checking for updates…"
 msgstr "Controllo aggiornamenti in corso…"
 
@@ -345,9 +342,6 @@ msgstr "Chiedi di impostare come app predefinita all'avvio"
 
 msgid "Only until {app} already opens .p7m files"
 msgstr "Solo finché {app} non è già l'app che apre i file .p7m"
-
-msgid "Check for updates at start-up"
-msgstr "Controlla aggiornamenti all'avvio"
 
 msgid "Every 4 hours at most, from the project's GitHub Releases"
 msgstr "Al massimo ogni 4 ore, dalle Release del progetto su GitHub"
@@ -610,3 +604,109 @@ msgstr "Firma: controllo in corso…"
 
 msgid "Signature: could not be checked"
 msgstr "Firma: non è stato possibile controllarla"
+
+#: src/sample_app/gui/application.py:290
+#, python-brace-format
+msgid "{app} {version} is up to date"
+msgstr "{app} {version} è aggiornata"
+
+#: src/sample_app/gui/application.py:300
+msgid "Click to see what is new and update."
+msgstr "Fai clic per vedere le novità e aggiornare."
+
+#: src/sample_app/gui/update_dialog.py:36
+msgid "Update Available"
+msgstr "Aggiornamento disponibile"
+
+#: src/sample_app/gui/update_dialog.py:49
+msgid "Install Update"
+msgstr "Installa l'aggiornamento"
+
+#: src/sample_app/gui/update_dialog.py:52
+msgid "Open Release Page"
+msgstr "Apri la pagina della versione"
+
+#: src/sample_app/gui/update_dialog.py:59
+#, python-brace-format
+msgid "You have version {version}."
+msgstr "Hai la versione {version}."
+
+#: src/sample_app/gui/update_dialog.py:63
+#, python-brace-format
+msgid "The download is {size} MB."
+msgstr "Il download è di {size} MB."
+
+#: src/sample_app/gui/update_dialog.py:64
+#, python-brace-format
+msgid "{app} closes while the new version is installed, and opens again."
+msgstr ""
+"{app} si chiude mentre la nuova versione viene installata, e si riapre."
+
+#: src/sample_app/gui/update_dialog.py:66
+#, python-brace-format
+msgid "{app} {version} Is Available"
+msgstr "È disponibile {app} {version}"
+
+#: src/sample_app/gui/update_dialog.py:78
+msgid "What Is New"
+msgstr "Novità"
+
+#: src/sample_app/gui/update_dialog.py:86
+msgid "Release Page"
+msgstr "Pagina della versione"
+
+#: src/sample_app/gui/update_dialog.py:86
+msgid "This version on GitHub, with its files"
+msgstr "Questa versione su GitHub, con i suoi file"
+
+#: src/sample_app/gui/update_dialog.py:128
+#, python-brace-format
+msgid "Downloading: {done} of {total} MB"
+msgstr "Download: {done} di {total} MB"
+
+#: src/sample_app/gui/window.py:64
+msgid "Check for Updates…"
+msgstr "Controlla aggiornamenti…"
+
+#: src/sample_app/gui/window.py
+msgid "Open the Error Log"
+msgstr "Apri il registro degli errori"
+
+#: src/sample_app/gui/window.py
+msgid "No errors have been recorded."
+msgstr "Nessun errore registrato."
+
+#: src/sample_app/gui/window.py:119
+msgid "Files"
+msgstr "File"
+
+#: src/sample_app/gui/window.py:120
+msgid "Folders"
+msgstr "Cartelle"
+
+#: src/sample_app/gui/window.py:121
+msgid "Size"
+msgstr "Dimensione"
+
+#: src/sample_app/gui/window.py:290
+msgid "Updates"
+msgstr "Aggiornamenti"
+
+#: src/sample_app/gui/window.py
+msgid "Check for updates automatically"
+msgstr "Controlla gli aggiornamenti automaticamente"
+
+#: src/sample_app/gui/window.py
+#, python-brace-format
+msgid "At start-up and when the window is opened again, at most every {hours} hours, from the project's releases on GitHub; nothing about you or your files is sent"
+msgstr "All'avvio e quando si riapre la finestra, al massimo ogni {hours} ore, dalle versioni pubblicate su GitHub; non viene inviato nulla su di te o sui tuoi file"
+
+#: src/sample_app/gui/window.py:320
+msgid "Measuring the space taken by the app's files…"
+msgstr "Misura dello spazio occupato dai file dell'app…"
+
+msgid "Finish the current work before installing the update."
+msgstr "Termina il lavoro in corso prima di installare l’aggiornamento."
+
+msgid "Release notes in English"
+msgstr "Note in inglese"

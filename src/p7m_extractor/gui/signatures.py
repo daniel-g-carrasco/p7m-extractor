@@ -16,6 +16,8 @@ from gi.repository import Gtk, Pango  # noqa: E402
 from p7m_extractor.core import verdict  # noqa: E402
 from p7m_extractor.i18n import _  # noqa: E402
 
+from .style_values import SIZE_SIGNATURE_DETAIL_GAP, SPACE_XXS
+
 # Envelopes drawn one inside the other; past this depth the ones further in
 # follow at the same width, each with its caption ("3 of 7 from the outside"),
 # so that a file signed over many times stays readable and the window narrow.
@@ -120,12 +122,12 @@ def content(layers, document: str, lists_days: int | None) -> Gtk.Widget:
     state = verdict.worst(everyone(layers))
     top = Gtk.Box(spacing=PAD)
     top.append(Gtk.Image(icon_name=icon_of(state), pixel_size=32, valign=Gtk.Align.START, css_classes=[class_of(state)]))
-    words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
+    words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=SPACE_XXS, hexpand=True)
     words.append(_label(title, "title-3"))
     words.append(_label(outcome, "dim-label"))
     top.append(words)
 
-    page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin_top=18, margin_bottom=18,
+    page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=SIZE_SIGNATURE_DETAIL_GAP, margin_top=SIZE_SIGNATURE_DETAIL_GAP, margin_bottom=SIZE_SIGNATURE_DETAIL_GAP,
                    margin_start=PAD, margin_end=PAD)
     page.append(top)
     if layers:

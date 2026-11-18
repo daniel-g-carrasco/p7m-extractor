@@ -86,6 +86,12 @@
   </screenshots>
 
   <releases>
+    <release version="1.5.2" date="2026-11-18">
+      <description>
+        <p>On Windows, secondary windows use the system title bar. The new update window shows the release notes in Italian when the app is set to Italian. Preferences and Signatures share the layout of the other windows.</p>
+        <p>The packages include library licence notices, and corresponding sources are available alongside the release downloads. The Windows installer and portable package are smaller.</p>
+      </description>
+    </release>
     <release version="1.5.1" date="2026-11-17">
       <description>
         <p>A new icon, in the style now shared by the apps of the same family: a red wax seal with two straight ribbons on a blue canvas, on a square canvas with a little thickness below it. On Windows it reaches the edge of its square in the taskbar, with a drawing of its own for the small sizes.</p>

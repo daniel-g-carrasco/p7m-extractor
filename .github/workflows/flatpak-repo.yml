@@ -1,14 +1,14 @@
 name: Flatpak repository
 
 # Publishes the app to our own Flatpak repository (an ostree repo on the
-# gh-pages branch, served by GitHub Pages): every v* tag lands there as the
-# "stable" branch, signed with the key in the FLATPAK_GPG_PRIVATE_KEY secret.
+# gh-pages branch, served by GitHub Pages): a complete published release
+# lands there as the "stable" branch, signed with the key in the FLATPAK_GPG_PRIVATE_KEY secret.
 # Users install once from p7m-extractor.flatpakref and get updates from
 # GNOME Software like any other app. The GNOME runtime comes from Flathub.
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -20,16 +20,25 @@ concurrency:
 
 env:
   BASE_URL: https://daniel-g-carrasco.github.io/p7m-extractor
-  MANIFEST: build-aux/flatpak/io.github.daniel_g_carrasco.p7m-extractor.yaml
 
 jobs:
   publish:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
     steps:
       - uses: actions/checkout@v7
+
+      - name: Require a published release with sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          command -v gh >/dev/null || dnf install -y gh
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft,assets \
+            --jq 'if .isDraft then empty else .assets[].name end' \
+            | grep -Fx "p7m-extractor-${GITHUB_REF_NAME}-sources.zip"
 
       - name: Fetch the published repository
         run: |
@@ -64,22 +73,29 @@ jobs:
           FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
           FLATPAK_GPG_KEY_ID: ${{ vars.FLATPAK_GPG_KEY_ID }}
 
-      - name: Build into the repository
+      - name: Import the exact Flatpak from the release
         run: |
-          flatpak-builder --disable-rofiles-fuse --force-clean --ccache=false \
-            --repo=pages/repo --gpg-sign="$FLATPAK_GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" \
-            build-dir "$MANIFEST"
+          command -v minisign >/dev/null || dnf install -y minisign
+          bundle="p7m-extractor-${GITHUB_REF_NAME}-linux-x64.flatpak"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$bundle" --pattern "$bundle.minisig"
+          key="$(python3 -c 'import sys; sys.path.insert(0, "src"); import p7m_extractor as p; print(p.PUBLIC_KEY)')"
+          minisign -V -P "$key" -m "$bundle" -x "$bundle.minisig"
+          flatpak build-import-bundle --no-update-summary \
+            --gpg-sign="$FLATPAK_GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" pages/repo "$bundle"
           flatpak build-update-repo --generate-static-deltas --prune --prune-depth=3 \
             --gpg-sign="$FLATPAK_GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" pages/repo
           ostree refs --repo=pages/repo
         env:
           FLATPAK_GPG_KEY_ID: ${{ vars.FLATPAK_GPG_KEY_ID }}
+          GH_TOKEN: ${{ github.token }}
 
       - name: Write the .flatpakref, .flatpakrepo and index page
         run: |
           key="$(gpg --batch --export "$FLATPAK_GPG_KEY_ID" | base64 -w0)"
           version="$(python3 -c 'import sys; sys.path.insert(0, "src"); import p7m_extractor as p; print(p.__version__)')"
-          python3 tools/flatpak_repo_files.py pages "$BASE_URL" "$key" "$version"
+          python3 tools/flatpak_repo_files.py pages "$BASE_URL" "$key" "$version" \
+            --sources-asset "p7m-extractor-${GITHUB_REF_NAME}-sources.zip"
           cp data/icons/hicolor/256x256/apps/io.github.daniel_g_carrasco.p7m-extractor.png pages/icon.png
           echo "version=$version" >> "$GITHUB_ENV"
         env:

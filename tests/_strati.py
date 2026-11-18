@@ -21,5 +21,5 @@ DEBTS: dict[str, str] = {}
 # Frozen: none may be added (plain logic belongs in core, data or app).
 GUI_WITHOUT_TOOLKIT: dict[str, str] = {}
 
-# gui modules that are values and nothing else: none in P7M Extractor.
-GUI_VALUES: set[str] = set()
+# The model generates these GUI constants from style/tokens.toml.
+GUI_VALUES = {"gui/style_values.py"}

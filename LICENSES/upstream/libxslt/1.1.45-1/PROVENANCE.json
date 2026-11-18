@@ -1,0 +1,13 @@
+{
+  "package": "mingw-w64-ucrt-x86_64-libxslt",
+  "version": "1.1.45-1",
+  "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libxslt-1.1.45-1.src.tar.zst",
+  "source_sha256": "67bef813cbdfced421e084867eb32e037e48d911a44ca619d45393830f85c454",
+  "files": [
+    {
+      "file": "Copyright",
+      "sha256": "7e48e290b6bfccc2ec1b297023a1d77f2fd87417f71fbb9f50aabef40a851819",
+      "source_member": "mingw-w64-libxslt/libxslt-v1.1.45.tar.gz!/libxslt-v1.1.45/Copyright"
+    }
+  ]
+}

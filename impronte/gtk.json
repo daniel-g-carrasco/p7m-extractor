@@ -1,0 +1,140 @@
+{
+  "format": 1,
+  "group": "gtk",
+  "upstream_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee",
+  "mappings": [
+    [
+      "gtk/comune/src/gui/sizing.py",
+      "src/p7m_extractor/gui/sizing.py"
+    ],
+    [
+      "gtk/comune/src/gui/secondaries.py",
+      "src/p7m_extractor/gui/secondaries.py"
+    ],
+    [
+      "gtk/comune/tests/test_secondary_geometry.py",
+      "tests/test_secondary_geometry.py"
+    ],
+    [
+      "gtk/comune/src/gui/release_dialog.py",
+      "src/p7m_extractor/gui/release_dialog.py"
+    ],
+    [
+      "gtk/comune/src/gui/about_widgets.py",
+      "src/p7m_extractor/gui/about_widgets.py"
+    ],
+    [
+      "gtk/comune/src/gui/update_widgets.py",
+      "src/p7m_extractor/gui/update_widgets.py"
+    ],
+    [
+      "gtk/comune/tests/test_release_dialog.py",
+      "tests/test_release_dialog.py"
+    ],
+    [
+      "gtk/comune/tools/check_alignment.py",
+      "tools/check_alignment.py"
+    ],
+    [
+      "gtk/comune/tools/package_inventory.py",
+      "tools/package_inventory.py"
+    ],
+    [
+      "gtk/comune/tests/test_package_inventory.py",
+      "tests/test_package_inventory.py"
+    ],
+    [
+      "gtk/comune/tools/collect_sources.py",
+      "tools/collect_sources.py"
+    ],
+    [
+      "gtk/comune/tests/test_collect_sources.py",
+      "tests/test_collect_sources.py"
+    ],
+    [
+      "gtk/comune/tools/release_gate.py",
+      "tools/release_gate.py"
+    ]
+  ],
+  "replacements": [],
+  "files": [
+    {
+      "source": "gtk/comune/src/gui/about_widgets.py",
+      "target": "src/p7m_extractor/gui/about_widgets.py",
+      "sha256": "fd2e069430a8a2043be0640d7989ddfce9bea6218c7c5083091cfcdf475719a6",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/src/gui/release_dialog.py",
+      "target": "src/p7m_extractor/gui/release_dialog.py",
+      "sha256": "6314806e960c9054bdcb08fba3d00a29f2000fceb1e491feacd454bbaed3a5ca",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/src/gui/secondaries.py",
+      "target": "src/p7m_extractor/gui/secondaries.py",
+      "sha256": "0bd27e14704ad11a129b260136a96d0e9dd576f4722367f6c1c68e83604898d1",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/src/gui/sizing.py",
+      "target": "src/p7m_extractor/gui/sizing.py",
+      "sha256": "d0e69f8785bb6fb711838a2388813c80b5ad231664c9c1dce57ac34a01e46e28",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/src/gui/update_widgets.py",
+      "target": "src/p7m_extractor/gui/update_widgets.py",
+      "sha256": "c354ab6a6cf53c7ae43902002df190e7f0be544363789d655ca3e3303c9f885c",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/tests/test_collect_sources.py",
+      "target": "tests/test_collect_sources.py",
+      "sha256": "b03aa1a53e79f89f785056f8533a6a49048542b4b02687f17da2b280d24e1706",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/tests/test_package_inventory.py",
+      "target": "tests/test_package_inventory.py",
+      "sha256": "b431d323daaa2486f977ed989fd7124a0ee13867d7c0e046c4de019369506ed3",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/tests/test_release_dialog.py",
+      "target": "tests/test_release_dialog.py",
+      "sha256": "4226eb9b77b17df9e6deb6c52d87251edc8969d5a9de71b8f85dfdf4cd1c4d14",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/tests/test_secondary_geometry.py",
+      "target": "tests/test_secondary_geometry.py",
+      "sha256": "ca5148c6b19ac225853ef6f5ee3b019a9f6270f311b8f70c03327aa1392a7d42",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/tools/check_alignment.py",
+      "target": "tools/check_alignment.py",
+      "sha256": "ebb77e8d7c2f552de24b70229ada1756b135b47c479f276e0ceaf323894aedfc",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    },
+    {
+      "source": "gtk/comune/tools/collect_sources.py",
+      "target": "tools/collect_sources.py",
+      "sha256": "f3df55142eb49a0c398a8b61a032b623ac75f7655a2e8c39f29f7c94b98259f3",
+      "baseline_version": "794de8133ee49599170a66a51d8a18b36e4c7261"
+    },
+    {
+      "source": "gtk/comune/tools/package_inventory.py",
+      "target": "tools/package_inventory.py",
+      "sha256": "3dcc444fd95df6c95859d241640d9566d9ace07fd3ff8f421f3cc9c7ffcdcefb",
+      "baseline_version": "794de8133ee49599170a66a51d8a18b36e4c7261"
+    },
+    {
+      "source": "gtk/comune/tools/release_gate.py",
+      "target": "tools/release_gate.py",
+      "sha256": "dd3af363aa3802f63e78522ed8ced350e8def93d384409b120f1233ed1da2831",
+      "baseline_version": "acdd9c633c210b328f0fa5cd4058f38b0f7317ee"
+    }
+  ]
+}

@@ -7,11 +7,11 @@ are tested by the common tests (test_updates, test_minisign, test_paths,
 test_i18n), with made-up names: what is this app's is tested here."""
 
 import os
+import io
 import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 import _setup
@@ -101,7 +101,7 @@ class ReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             paths = services.Folders(root / "config", root / "state", root / "data")
-            prefs = SimpleNamespace(theme="auto", language="it", check_updates=True, notices=[])
+            prefs = diagnostics.Preferences(theme="auto", language="it", check_updates=True)
             lines = diagnostics.summary("P7M Extractor", __version__, prefs, paths, "GTK").splitlines()
             self.assertIn(f"settings: {root / 'config' / 'settings.ini'}", lines)
             self.assertIn(f"errors: {errorlog.log_file(root / 'state')} (none)", lines)
@@ -109,6 +109,31 @@ class ReportTest(unittest.TestCase):
 
 
 class SettingsTest(unittest.TestCase):
+    @unittest.skipUnless(_setup.WINDOWS, "Windows only")
+    def test_existing_local_ini_and_lists_are_authoritative(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local, roaming = root / "Local", root / "Roaming"
+            paths = services.app_paths({"LOCALAPPDATA": str(local), "APPDATA": str(roaming)})
+            paths.trusted_lists.mkdir(parents=True)
+            kept = paths.trusted_lists / "synthetic.xml"
+            kept.write_bytes(b"synthetic trust list")
+            paths.config_file.write_text(
+                "[general]\nlanguage = it\nverify_signatures = false\nfuture_key = kept\n"
+                "[future_section]\nfield = kept\n", encoding="utf-8")
+            other = roaming / SLUG / "settings.ini"
+            other.parent.mkdir(parents=True)
+            other.write_text("[general]\nlanguage = en\n", encoding="utf-8")
+            existing = settings.Settings(paths.config_file)
+            self.assertEqual(existing.get("language"), "it")
+            self.assertFalse(existing.get_bool("verify_signatures"))
+            existing.set("color_scheme", "dark")
+            saved = paths.config_file.read_text(encoding="utf-8")
+            self.assertIn("future_key = kept", saved)
+            self.assertIn("[future_section]\nfield = kept", saved)
+            self.assertEqual(kept.read_bytes(), b"synthetic trust list")
+            self.assertEqual(other.read_text(encoding="utf-8"), "[general]\nlanguage = en\n")
+
     def test_saved_whole_and_read_back(self):
         with tempfile.TemporaryDirectory() as tmp:
             ini = Path(tmp) / "config" / "settings.ini"
@@ -144,29 +169,23 @@ class LanguageTest(unittest.TestCase):
 class CheckUpdateTest(unittest.TestCase):
     """--check-update: 0 when GitHub answered, 3 when the network failed."""
 
-    def outcome(self, error):
-        with mock.patch.object(updates, "latest_release", side_effect=error), \
+    def outcome(self, *, response=None, error=None):
+        with mock.patch.object(updates.urllib.request, "urlopen",
+                               return_value=response, side_effect=error), \
                 mock.patch("sys.stdout"), mock.patch("sys.stderr"):
             return cli.run_check_update()
 
-    def raised(self, cause):
-        try:
-            try:
-                raise cause
-            except Exception:
-                raise updates.UpdateError(str(cause)) from None
-        except updates.UpdateError as error:
-            return error
-
     def test_an_answer_of_github_is_not_a_failure_of_the_network(self):
-        http = urllib.error.HTTPError("https://api.github.com", 403, "rate limited", None, None)
-        self.assertEqual(self.outcome(self.raised(http)), 0)
-        self.assertEqual(self.outcome(updates.NoRelease("GitHub answered 404")), 0)
-        self.assertEqual(self.outcome(updates.UpdateError("unexpected answer from GitHub")), 0)
+        for status in (403, 404, 429):
+            with self.subTest(status=status):
+                http = urllib.error.HTTPError("https://api.github.com", status, "error", None, None)
+                self.assertEqual(self.outcome(error=http), 0)
+        for payload in (b"{", b"{}", b'{"tag_name": "v9.1.2"}'):
+            self.assertEqual(self.outcome(response=io.BytesIO(payload)), 0)
 
     def test_the_network_failing_is(self):
-        self.assertEqual(self.outcome(self.raised(urllib.error.URLError("no route"))), 3)
-        self.assertEqual(self.outcome(self.raised(TimeoutError("timed out"))), 3)
+        self.assertEqual(self.outcome(error=urllib.error.URLError("no route")), 3)
+        self.assertEqual(self.outcome(error=TimeoutError("timed out")), 3)
 
 
 if __name__ == "__main__":

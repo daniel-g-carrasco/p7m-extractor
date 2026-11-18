@@ -1,0 +1,6 @@
+{
+  "tools/collect_sources.py": "Windows/MSYS2 release verification needs the pacman public keyring, signed detached-signature members, MSYS2 epoch filenames, and makepkg's checksums for pinned Git snapshots.",
+  "tools/package_inventory.py": "Windows bundles include byte-verified notices from matching MSYS2 source archives when the binary package ships no notice.",
+  "tools/release_gate.py": "Keep the published Flatpak filename and also require the signed sources and the Linux portable bundle with its verified source provenance.",
+  "tools/flatpak_repo_files.py": "The Flatpak repository links to the verified source archive shared by the Windows, Linux portable and Flatpak downloads."
+}

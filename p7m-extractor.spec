@@ -12,7 +12,7 @@ ICON = 'assets/icon.ico' if WIN else None
 
 # Application icons for the GTK icon theme (window icon, About dialog).
 # PyInstaller's GLib runtime hook points XDG_DATA_DIRS at <bundle>/share.
-datas = [('data/icons', 'share/icons')]
+datas = [('data/icons', 'share/icons'), ('src/p7m_extractor/gui/style.css', 'p7m_extractor/gui')]
 binaries = []
 
 # Translations, compiled from po/ by `python tools/compile_po.py` (CI does it
@@ -40,23 +40,6 @@ if WIN:
         binaries.append((gdbus, '.'))
     else:
         print('WARNING: gdbus.exe not found: every launch will open a new window')
-
-    # CA bundle for the update check: MSYS2's OpenSSL does not necessarily
-    # read the Windows certificate store (see _ssl_context()).
-    import ssl
-    candidates = [
-        prefix / 'etc' / 'ssl' / 'certs' / 'ca-bundle.crt',
-        prefix / 'etc' / 'ssl' / 'cert.pem',
-        Path(ssl.get_default_verify_paths().openssl_cafile or ''),
-    ]
-    for ca in candidates:
-        if ca.is_file():
-            datas.append((str(ca), 'certs'))
-            if ca.name != 'ca-bundle.crt':
-                print(f'NOTE: bundling {ca} as certs/{ca.name}; expected name is ca-bundle.crt')
-            break
-    else:
-        print('WARNING: no CA bundle found: the update check may fail on TLS')
 
 # Signature verification (pyHanko): the certificates of the European list of
 # trusted lists, the XML schemas and the tables its libraries read at run
@@ -87,6 +70,12 @@ except ImportError:
 # Introspection modules the gi hook must collect: a libadwaita app on both
 # systems (on Windows inside a window with the system title bar).
 GI_VERSIONS = {'Gtk': '4.0', 'Gdk': '4.0', 'Adw': '1'}
+gi_config = {'module-versions': GI_VERSIONS}
+hooks = {'gi': gi_config}
+if WIN:
+    gi_config.update(icons=['Adwaita'], languages=['en', 'en_US', 'it'])
+    # GTK links GStreamer, but P7M never opens media.
+    hooks['gstreamer'] = {'include_plugins': []}
 
 a = Analysis(
     [os.path.join(SPECPATH, 'build-aux', 'windows', 'p7m_extractor_main.py')],
@@ -94,63 +83,52 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden,
-    hooksconfig={'gi': {'module-versions': GI_VERSIONS}},
+    hookspath=[os.path.join(SPECPATH, 'build-aux', 'windows', 'hooks')] if WIN else [],
+    excludes=['PIL', 'numpy', 'fontTools', 'threadpoolctl'] if WIN else [],
+    hooksconfig=hooks,
 )
 
 
 
-def msys2_licences(toc, root):
-    """Windows: the licence texts of the MSYS2 packages the bundle takes files
-    from, and licenses/msys2/PACKAGES.txt with each package's version, licence
-    and source archive. The owner of each file is read from pacman's database."""
-    db = root / 'var' / 'lib' / 'pacman' / 'local'
-    if not db.is_dir():
-        print(f'WARNING: no pacman database in {db}: the MSYS2 licences are not bundled')
-        return []
-    owner, packages = {}, {}
-    for entry in db.iterdir():
-        try:
-            desc = (entry / 'desc').read_text(encoding='utf-8').split('\n\n')
-            names = (entry / 'files').read_text(encoding='utf-8').split('%FILES%\n', 1)[1].split('\n\n')[0].split('\n')
-        except (OSError, IndexError):
-            continue
-        fields = {block.split('\n')[0]: block.split('\n')[1:] for block in desc if block.startswith('%')}
-        packages[entry.name] = fields, [n for n in names if '/share/licenses/' in n and not n.endswith('/')]
-        for name in names:
-            if name.startswith(('ucrt64/', 'mingw64/')) and not name.endswith('/'):
-                owner[name.lower()] = entry.name
-    used = set()
-    for _dest, source, _kind in toc:
-        try:
-            relative = Path(source).resolve().relative_to(root.resolve()).as_posix().lower()
-        except (ValueError, OSError):
-            continue
-        if relative in owner:
-            used.add(owner[relative])
-    entries, lines = [], ['MSYS2 packages the bundle takes files from (https://www.msys2.org).',
-                          'Their licence texts are in this folder; the sources of each version are',
-                          'at the address given (and in https://github.com/msys2/MINGW-packages).', '']
-    for package in sorted(used):
-        fields, licences = packages[package]
-        name, version = fields['%NAME%'][0], fields['%VERSION%'][0]
-        base = (fields.get('%BASE%') or [name])[0]
-        lines += [f'{name} {version}', f'  licence: {" ".join(fields.get("%LICENSE%", ["?"]))}',
-                  f'  source: https://repo.msys2.org/mingw/sources/{base}-{version}.src.tar.zst', '']
-        for licence in licences:
-            path = root / licence
-            if path.is_file():
-                inner = licence.split('/share/licenses/', 1)[1]
-                entries.append((f'licenses/msys2/{inner}', str(path), 'DATA'))
-    listing = Path(workpath) / 'PACKAGES.txt'
-    listing.parent.mkdir(parents=True, exist_ok=True)
-    listing.write_text('\n'.join(lines), encoding='utf-8', newline='\n')
-    entries.append(('licenses/msys2/PACKAGES.txt', str(listing), 'DATA'))
-    print(f'NOTE: licences of {len(used)} MSYS2 packages bundled ({len(entries) - 1} files)')
-    return entries
-
-
 if WIN:
-    a.datas += msys2_licences(a.binaries + a.datas, prefix.parent)
+    root = Path(SPECPATH)
+    # Pango on Windows uses the platform's fonts. Keep its configuration.
+    a.datas = [row for row in a.datas if not (
+        Path(row[0]).parts[:2] == ('share', 'fonts')
+        or Path(row[0]).name == 'icon-theme.cache'
+        # pip bookkeeping is generated at install time and unused at runtime.
+        or (Path(row[0]).parent.suffix == '.dist-info'
+            and Path(row[0]).name in ('INSTALLER', 'RECORD', 'REQUESTED', 'direct_url.json'))
+    )]
+    # A shared hicolor directory can contain icons installed by unrelated apps.
+    theme = prefix / 'share' / 'icons' / 'hicolor' / 'index.theme'
+    a.datas.append(('share/icons/hicolor/index.theme', str(theme), 'DATA'))
+    # Since Windows 10 the OS provides UCRT and these API-set forwarders.
+    # Keep the runtime shipped by MSYS2 (e.g. libgcc and libwinpthread).
+    a.binaries = [row for row in a.binaries if not (
+        Path(row[0]).name.lower().startswith('api-ms-win-')
+        or Path(row[0]).name.lower() == 'ucrtbase.dll'
+    )]
+    # Ship the exact public CA data from the certifi wheel. The MSYS2 CA
+    # file is regenerated from the host's trust store by a pacman hook.
+    import certifi
+    a.datas.append(('certs/ca-bundle.crt', certifi.where(), 'DATA'))
+    sys.path.insert(0, str(root / "tools"))
+    from package_inventory import inventory
+
+    # PyInstaller creates empty namespace modules for which no source file exists.
+    pure = [row for row in a.pure if row[1] != '-']
+    record, notices = inventory([*a.binaries, *a.datas, *pure, *a.scripts],
+                                prefix.parent, root, Path(workpath),
+                                revision=os.environ.get("APP_SOURCE_REVISION") or os.environ.get("GITHUB_SHA", "dev"))
+    a.datas += notices
+elif os.environ.get("P7M_LINUX_SOURCE_INPUTS"):
+    root = Path(SPECPATH).resolve()
+    sys.path.insert(0, str(root / "tools"))
+    from linux_source_inputs import capture
+
+    a.datas += capture([*a.binaries, *a.datas, *a.pure, *a.scripts], root, Path(workpath).resolve())
+
 
 pyz = PYZ(a.pure)
 

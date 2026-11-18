@@ -12,10 +12,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: python3 tools/check_public.py
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: python tests/test_extract.py
+      - name: Check style and Python sources
+        run: |
+          pip install ruff==0.17.5
+          ruff check --config tools/ruff.toml .
+          python tools/make_style.py --check
+      - name: Check translation catalogues
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext
+          python tools/compile_po.py --check
       - name: The whole suite (the common tests of the model's copies too)
         run: python tools/run_tests.py tests
       - name: The verification of signatures, with the pyHanko the builds carry
@@ -51,26 +64,34 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: >-
-            zip
-            mingw-w64-ucrt-x86_64-gtk4
-            mingw-w64-ucrt-x86_64-libadwaita
-            mingw-w64-ucrt-x86_64-python
-            mingw-w64-ucrt-x86_64-python-gobject
-            mingw-w64-ucrt-x86_64-pyinstaller
-            mingw-w64-ucrt-x86_64-ca-certificates
-            mingw-w64-ucrt-x86_64-python-pip
-            mingw-w64-ucrt-x86_64-python-cryptography
-            mingw-w64-ucrt-x86_64-python-lxml
-            mingw-w64-ucrt-x86_64-python-aiohttp
-            mingw-w64-ucrt-x86_64-python-asn1crypto
-      - name: pyHanko, for the verification of signatures
-        # what has compiled parts comes from MSYS2 (above), the rest from
-        # PyPI, in the version tools/flatpak_wheels.py pins for every build
+          install: zip curl
+      - name: Install the verified UCRT64 build inputs
         run: |
-          pip install --break-system-packages "pyhanko[etsi]==$(python tools/flatpak_wheels.py --version)"
+          set -euo pipefail
+          archives=$(mktemp -d)
+          while read -r checksum file; do
+            [[ -z "$checksum" || "$checksum" == \#* ]] && continue
+            url="https://repo.msys2.org/mingw/ucrt64/$file"
+            curl -fsSL --retry 3 "$url" -o "$archives/$file"
+            curl -fsSL --retry 3 "$url.sig" -o "$archives/$file.sig"
+            (cd "$archives" && printf '%s  %s\n' "$checksum" "$file" | sha256sum --check --strict -)
+          done < build-aux/windows/msys2-packages.lock
+          sed -E '/^[[:space:]]*LocalFileSigLevel[[:space:]]*=/d; /^\[options\]$/a LocalFileSigLevel = Required' \
+            /etc/pacman.conf > "$archives/pacman.conf"
+          pacman --config "$archives/pacman.conf" -U --noconfirm --needed "$archives"/*.pkg.tar.zst
+      - name: pyHanko, for the verification of signatures
+        # Compiled extensions come from the locked MSYS2 packages above.
+        run: |
+          python -m pip install --break-system-packages --no-deps --require-hashes -r build-aux/windows/python-wheels.lock
+          python -c "from importlib.metadata import version; assert version('pyhanko') == '$(python tools/flatpak_wheels.py --version)'"
           python tests/test_verify.py -v 2>&1 | tee verify.log
           if grep -q "skipped" verify.log; then echo "the checks were skipped: pyHanko did not load"; exit 1; fi
+      - name: Record the checked-out source commit
+        shell: pwsh
+        run: |
+          $revision = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "APP_SOURCE_REVISION=$revision" >> $env:GITHUB_ENV
       - name: Build with PyInstaller
         run: |
           python tools/compile_po.py
@@ -80,6 +101,9 @@ jobs:
           I=dist/p7m-extractor/_internal
           test -f "$I/gi_typelibs/Gtk-4.0.typelib"
           test -f "$I/gi_typelibs/Adw-1.typelib"
+          test -f "$I/lib/gdk-pixbuf/loaders.cache"
+          test -f "$I/lib/gdk-pixbuf/loaders/pixbufloader_svg.dll"
+          test -f "$I/lib/gdk-pixbuf/loaders/libpixbufloader-png.dll"
           ls "$I"/libadwaita-1-*.dll
           ls "$I"/libgtk-4-*.dll
           test -f "$I/gdbus.exe"          # single-instance support (GApplication)
@@ -89,7 +113,9 @@ jobs:
           test -f "$I/share/locale/it/LC_MESSAGES/p7m-extractor.mo"
           test -f "$I/licenses/LICENSE"                   # the GPL travels with the program
           test -f "$I/licenses/msys2/PACKAGES.txt"        # the MSYS2 packages, their licences and sources
-          test -f "$I/licenses/msys2/gtk4/COPYING"
+          test -f "$I/licenses/inventory.json"
+          test -f "$I/p7m_extractor/gui/style.css"
+          find "$I/licenses/msys2" -path '*/gtk4/COPYING' -print -quit | grep -q .
       - name: Ensure GLib schemas and icon themes are bundled
         run: |
           APPDIR=dist/p7m-extractor/_internal
@@ -100,7 +126,7 @@ jobs:
           mkdir -p "$APPDIR/share/icons"
           # -n: merge without overwriting the app icons already placed by the spec
           cp -rn /ucrt64/share/icons/Adwaita "$APPDIR/share/icons/" || true
-          cp -rn /ucrt64/share/icons/hicolor "$APPDIR/share/icons/" || true
+          test -f "$APPDIR/share/icons/hicolor/index.theme"
       - name: Slim the bundle (locales and icon variants the app never loads)
         run: |
           I=dist/p7m-extractor/_internal
@@ -111,6 +137,8 @@ jobs:
           gtk4-update-icon-cache -q -t -f "$I/share/icons/Adwaita"
           gtk4-update-icon-cache -q -t -f "$I/share/icons/hicolor"
           du -sm "$I" | cut -f1 | xargs -I{} echo "bundle after slimming: {} MB"
+      - name: Seal the staged Windows inventory
+        run: python tools/package_inventory.py --bundle dist/p7m-extractor --seal p7m-extractor.exe --strict --msys-root "$(cygpath -w /)"
       - name: Smoke test (CLI through the bundled exe)
         run: |
           python tests/test_extract.py --make-sample sample.p7m
@@ -141,7 +169,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           case "$VERSION" in v*) ;; *) VERSION=dev ;; esac
-          cd dist && zip -qr "../p7m-extractor-${VERSION}-windows-x64-portable.zip" p7m-extractor
+          (cd dist && zip -qr "../p7m-extractor-${VERSION}-windows-x64-portable.zip" p7m-extractor)
+          python tools/package_inventory.py --portable "p7m-extractor-${VERSION}-windows-x64-portable.zip"
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
@@ -164,11 +193,20 @@ jobs:
           if (-not $p.WaitForExit(300000) -or $p.ExitCode -ne 0) { Write-Error "install: $($p.ExitCode)"; exit 1 }
           Start-Sleep 5
           if (Get-Process p7m-extractor -ErrorAction SilentlyContinue) { Write-Error 'opened without /RELAUNCH=1'; exit 1 }
-          $p = Start-Process $setup -ArgumentList ($opts + '/RELAUNCH=1') -PassThru
-          if (-not $p.WaitForExit(300000) -or $p.ExitCode -ne 0) { Write-Error "update: $($p.ExitCode)"; exit 1 }
-          Start-Sleep 15
-          if (-not (Get-Process p7m-extractor -ErrorAction SilentlyContinue)) { Write-Error 'the app was not opened again'; exit 1 }
-          Get-Process p7m-extractor | Stop-Process
+          foreach ($restart in @(@('/RELAUNCH=1'), @('/RESTARTAPP=1'), @('/RELAUNCH=1','/RESTARTAPP=1'))) {
+            $p = Start-Process $setup -ArgumentList ($opts + $restart) -PassThru
+            if (-not $p.WaitForExit(300000) -or $p.ExitCode -ne 0) { Write-Error "update: $($p.ExitCode)"; exit 1 }
+            Start-Sleep 15
+            $app = @(Get-Process p7m-extractor -ErrorAction SilentlyContinue)
+            if ($app.Count -ne 1) { Write-Error "expected one reopen, got $($app.Count)"; exit 1 }
+            $installed = Split-Path $app[0].Path
+            $app | Stop-Process
+            $payload = Get-Content "dist/p7m-extractor/_internal/licenses/inventory.json" -Raw | ConvertFrom-Json -AsHashtable
+            foreach ($file in $payload.payload.GetEnumerator()) {
+              $actual = (Get-FileHash -LiteralPath (Join-Path $installed $file.Key)).Hash.ToLowerInvariant()
+              if ($actual -ne $file.Value) { throw "Installer payload differs: $($file.Key)" }
+            }
+          }
       - uses: actions/upload-artifact@v7
         with:
           name: windows-x64
@@ -185,15 +223,20 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install GTK 4, libadwaita and PyGObject
         run: |
+          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
           sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
             gir1.2-adw-1 libadwaita-1-0 libgtk-4-1 libgtk-4-bin python3-venv \
-            binutils
+            libpython3.12 libglib2.0-bin binutils
       - name: Build with PyInstaller
+        env:
+          P7M_LINUX_SOURCE_INPUTS: "1"
         run: |
           python3 tools/compile_po.py
-          python3 -m venv --system-site-packages .venv
-          .venv/bin/pip install pyinstaller "pyhanko[etsi]==$(python3 tools/flatpak_wheels.py --version)"
+          /usr/bin/python3 -m venv --system-site-packages .venv
+          .venv/bin/pip install --only-binary=:all: --report "$RUNNER_TEMP/python-install.json" \
+            pyinstaller "pyhanko[etsi]==$(python3 tools/flatpak_wheels.py --version)" \
+            'cffi==2.1.1' 'cryptography==50.0.2' 'lxml==6.1.3'
           .venv/bin/pyinstaller --noconfirm p7m-extractor.spec
       - name: Verify GTK 4, libadwaita and the translations are in the bundle
         run: |
@@ -241,10 +284,20 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           case "$VERSION" in v*) ;; *) VERSION=dev ;; esac
           tar -C dist -czf "p7m-extractor-${VERSION}-linux-x64-portable.tar.gz" p7m-extractor
+      - name: Collect the portable build's corresponding sources
+        run: |
+          python3 tools/linux_source_inputs.py --bundle dist/p7m-extractor \
+            --binary p7m-extractor-*-linux-x64-portable.tar.gz --inputs build/p7m-extractor/linux-inputs.json \
+            --pip-report "$RUNNER_TEMP/python-install.json" --cache "$RUNNER_TEMP/portable-sources" \
+            --output linux-portable-sources.zip
       - uses: actions/upload-artifact@v7
         with:
           name: linux-x64
           path: p7m-extractor-*-linux-x64-portable.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-portable-sources
+          path: linux-portable-sources.zip
 
   flatpak:
     needs: test
@@ -254,13 +307,34 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v7
-      # action maintained in flatpak/…; the runtime images come from flathub-infra/actions-images
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+      - name: Build and export
+        run: |
+          set -eu
+          manifest=build-aux/flatpak/io.github.daniel_g_carrasco.p7m-extractor.yaml
+          version=dev
+          case "$GITHUB_REF" in refs/tags/v*) version="$GITHUB_REF_NAME" ;; esac
+          flatpak-builder --show-manifest "$manifest" > "$RUNNER_TEMP/flatpak-manifest.json"
+          flatpak-builder --disable-rofiles-fuse --force-clean --arch=x86_64 --repo=repo build-dir "$manifest"
+          flatpak build-bundle repo "p7m-extractor-${version}-linux-x64.flatpak" \
+            io.github.daniel_g_carrasco.p7m-extractor stable \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Collect the Flatpak's corresponding sources
+        run: |
+          git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            python3 tools/linux_source_inputs.py --bundle build-dir/files \
+              --binary p7m-extractor-*-linux-x64.flatpak --manifest "$RUNNER_TEMP/flatpak-manifest.json" \
+              --sdk "$(flatpak info --show-commit org.gnome.Sdk//50)" \
+              --runtime "$(flatpak info --show-commit org.gnome.Platform//50)" \
+              --cache "$RUNNER_TEMP/flatpak-sources" --output flatpak-sources.zip
+      - uses: actions/upload-artifact@v7
         with:
-          bundle: p7m-extractor-${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}-linux-x64.flatpak
-          manifest-path: build-aux/flatpak/io.github.daniel_g_carrasco.p7m-extractor.yaml
-          cache-key: flatpak-builder-${{ github.sha }}
-          upload-artifact: true
+          name: flatpak
+          path: p7m-extractor-*-linux-x64.flatpak
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-sources
+          path: flatpak-sources.zip
       - name: Lint the manifest for Flathub (informational)
         run: |
           if command -v flatpak-builder-lint >/dev/null 2>&1; then
@@ -276,9 +350,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
+          pattern: "{windows-x64,windows-installer,linux-x64,flatpak}"
       - name: Sign with the project's key (minisign), checked before anything is uploaded
         # the installed app runs an update only with this signature (the same
         # public key is in the code); the comment names the file, so another
@@ -302,12 +378,16 @@ jobs:
             minisign -V -P "$PUBLIC_KEY" -m "$f" -x "$f.minisig"
           done
           rm -f "$key"
+      - name: Prepare the notes in both languages
+        run: python3 tools/release_notes.py "$GITHUB_REF_NAME" --italian-output release-notes.it.md > release-body.md
       - uses: softprops/action-gh-release@v3
         with:
+          draft: true
+          body_path: release-body.md
           files: |
             *.zip
             *.tar.gz
             *.exe
             *.flatpak
             *.minisig
-          generate_release_notes: true
+            release-notes.it.md

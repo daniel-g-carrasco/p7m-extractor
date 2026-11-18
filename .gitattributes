@@ -1,0 +1,5 @@
+# Preserve the byte-for-byte copies from signed source archives.
+LICENSES/upstream/** -text
+
+# The Windows workflow reads the lock with Bash.
+build-aux/windows/*.lock text eol=lf

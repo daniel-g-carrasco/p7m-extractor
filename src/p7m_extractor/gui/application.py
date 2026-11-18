@@ -10,7 +10,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from p7m_extractor import APP_ID, APP_NAME, GITHUB_REPO, PACKAGE_DIR, __version__, _mark
+from p7m_extractor import APP_ID, APP_NAME, GITHUB_REPO, PACKAGE_DIR, SLUG, __version__, _mark
+from p7m_extractor import i18n
 from p7m_extractor.app import services, updates, verify
 from p7m_extractor.app.extract import extract_file, iter_p7m
 from p7m_extractor.app.settings import Settings, config_dir
@@ -27,8 +28,10 @@ from p7m_extractor.core import verdict
 from p7m_extractor.data.cms import BerError
 from p7m_extractor.i18n import _
 
-from . import signatures
-from .winquirks import win_watch_quirks
+from .style_values import (
+    SIZE_DROP_AREA_PADDING, SIZE_RESULT_ROW_GAP, SIZE_UPDATE_CONTENT, SIZE_UPDATE_HEIGHT, SIZE_UPDATE_WIDTH, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS,
+)
+from .winquirks import hwnd_of, win_watch_quirks
 
 # GTK 4 GUI
 
@@ -144,7 +147,7 @@ def run_gui(argv, settings: Settings) -> int:
     # The Windows title bar (system decorations): GTK honours GTK_CSD only
     # before it initialises, hence the environment variable set up front.
     use_csd = not (is_win and settings.get_bool("system_title_bar"))
-    if not use_csd:
+    if is_win:
         os.environ["GTK_CSD"] = "0"
     if is_win:
         # The GL renderers spend ~1 s compiling shaders before the first
@@ -188,6 +191,13 @@ def run_gui(argv, settings: Settings) -> int:
     except (ImportError, ValueError):
         Adw = None
     use_adw = Adw is not None
+    from . import signatures, sizing
+    from .secondaries import (
+        centre_on_parent, fit_preferences, header_bars_below, present_secondary, title_once, watch_dialog,
+    )
+    if use_adw:
+        from . import about_widgets, update_widgets
+        from .release_dialog import UpdateDialog as SharedUpdateDialog, UpdateLayout
     _mark("gtk-imported")
 
     import queue
@@ -219,14 +229,52 @@ def run_gui(argv, settings: Settings) -> int:
         """Common set-up of secondary windows: GTK header bar when using
         client-side decorations, Escape closes, native title bar follows the
         colour scheme on Windows."""
-        if use_csd:
+        if is_win:
+            win.add_css_class("system-titlebar")
+            win.connect("map", lambda window: centre_on_parent(window, hwnd_of))
+        elif use_csd:
             win.set_titlebar(Gtk.HeaderBar())
         close_on_escape(win)
         theme.watch_window(win)
 
+    def present_dialog(dialog, parent):
+        present_secondary(dialog, parent)
+        if is_win and use_adw and isinstance(dialog, Adw.Dialog):
+            def align_native_header():
+                root = dialog.get_root()
+                if isinstance(root, Gtk.Window) and root is not parent:
+                    for header in header_bars_below(dialog, Adw):
+                        if isinstance(dialog, Adw.PreferencesDialog):
+                            # Our one preferences page uses a custom title stack.
+                            header.set_title_widget(Gtk.Box())
+                        else:
+                            title_once(header, root.get_title() or "", Adw)
+                        header.set_show_start_title_buttons(False)
+                        header.set_show_end_title_buttons(False)
+                return False
+
+            GLib.idle_add(align_native_header)
+
+    def run_in_thread(work, done):
+        def target():
+            try:
+                result = work()
+            except Exception as error:
+                GLib.idle_add(done, None, error)
+            else:
+                GLib.idle_add(done, result, None)
+
+        threading.Thread(target=target, daemon=True).start()
+
+    def open_path(path):
+        open_uri(Path(path).as_uri())
+
+    def available_size(parent):
+        return sizing.available_size(parent, margin=SPACE_XL)
+
     def button_row(*buttons):
-        row = Gtk.Box(spacing=8, halign=Gtk.Align.END)
-        row.set_margin_top(8)
+        row = Gtk.Box(spacing=SPACE_M, halign=Gtk.Align.END)
+        row.set_margin_top(SPACE_M)
         for b in buttons:
             row.append(b)
         return row
@@ -416,7 +464,7 @@ def run_gui(argv, settings: Settings) -> int:
             self.src = src
             self._on_reveal = on_reveal
             self.dest = None
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=SIZE_RESULT_ROW_GAP)
             set_margins(box, top=6, bottom=6, start=10, end=10)
             self.icon = Gtk.Image.new_from_icon_name("content-loading-symbolic")
             self.icon.add_css_class("dim-label")
@@ -432,7 +480,7 @@ def run_gui(argv, settings: Settings) -> int:
             self.status.set_ellipsize(Pango.EllipsizeMode.END)
             self.status.add_css_class("dim-label")
             self.bar = Gtk.ProgressBar(visible=False)
-            self.bar.set_margin_top(4)
+            self.bar.set_margin_top(SPACE_XS)
             # what the verification found, under the outcome of the extraction
             self.signature = Gtk.Label(xalign=0.0, visible=False)
             self.signature.set_ellipsize(Pango.EllipsizeMode.END)
@@ -535,7 +583,7 @@ def run_gui(argv, settings: Settings) -> int:
 
     # The system title bar needs a plain GTK window: libadwaita's always
     # draws its own. Its content is libadwaita's all the same.
-    WindowBase = Adw.ApplicationWindow if use_adw and use_csd else Gtk.ApplicationWindow
+    WindowBase = Adw.ApplicationWindow if use_adw and not is_win else Gtk.ApplicationWindow
 
     class Window(WindowBase):
         def __init__(self, app):
@@ -555,6 +603,8 @@ def run_gui(argv, settings: Settings) -> int:
             self._banner_cb = None
             self._toast = None        # the last one (libadwaita)
             self._about = None
+            self._update_cb = None
+            self._update_dialog = None
             self.connect("map", lambda _w: _mark("window-mapped"))
 
             header = Adw.HeaderBar() if use_adw else Gtk.HeaderBar()
@@ -565,8 +615,8 @@ def run_gui(argv, settings: Settings) -> int:
                 else:
                     header.set_show_title_buttons(False)
                 header.set_title_widget(Gtk.Box())
-            elif not use_adw:
-                self.set_titlebar(header)    # libadwaita's: placed by the AdwToolbarView below
+            elif is_win or not use_adw:
+                self.set_titlebar(header)
 
             menu = Gio.Menu()
             if is_win:
@@ -576,8 +626,12 @@ def run_gui(argv, settings: Settings) -> int:
             section = Gio.Menu()
             section.append(_("Preferences"), "app.preferences")
             menu.append_section(None, section)
-            section = Gio.Menu()
-            section.append(_("About {app}").format(app=APP_NAME), "app.about")
+            if use_adw:
+                section = about_widgets.troubleshooting_menu(APP_NAME)
+            else:
+                section = Gio.Menu()
+                section.append(_("Open the Error Log"), "app.error-log")
+                section.append(_("About {app}").format(app=APP_NAME), "app.about")
             menu.append_section(None, section)
             self.menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
                                            primary=True, tooltip_text=_("Main menu (F10)"))
@@ -608,7 +662,7 @@ def run_gui(argv, settings: Settings) -> int:
                 self.connect("notify::is-active",
                              lambda _w, _p: setattr(self, "_alt_solo", False))
 
-            content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=SPACE_L)
             if use_adw:
                 # HIG layout: the toolbar view carries the header bar, the page
                 # lives in a toast overlay so messages arrive as toasts. The
@@ -616,9 +670,12 @@ def run_gui(argv, settings: Settings) -> int:
                 # the results card needs a scrolled window wider than itself.
                 self.toasts = Adw.ToastOverlay(child=content)
                 view = Adw.ToolbarView()
-                view.add_top_bar(header)
+                if not (is_win and use_csd):
+                    view.add_top_bar(header)
+                self.update_strip = update_widgets.update_banner(self.show_update)
+                view.add_top_bar(self.update_strip)
                 view.set_content(self.toasts)
-                if use_csd:
+                if not is_win:
                     self.set_content(view)
                 else:
                     self.set_child(view)
@@ -632,7 +689,7 @@ def run_gui(argv, settings: Settings) -> int:
                 # --- in-app notification banner -----------------------------
                 self.banner = Gtk.Revealer(
                     transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
-                bbox = Gtk.Box(spacing=12)
+                bbox = Gtk.Box(spacing=SPACE_L)
                 bbox.add_css_class("p7m-banner")
                 self.banner_label = Gtk.Label(hexpand=True, xalign=0.0, wrap=True)
                 self.banner_button = Gtk.Button(valign=Gtk.Align.CENTER)
@@ -650,7 +707,7 @@ def run_gui(argv, settings: Settings) -> int:
             theme.watch_window(self)
 
             # --- drop zone -------------------------------------------------
-            btns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+            btns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=SPACE_M,
                            halign=Gtk.Align.CENTER)
             b_files = Gtk.Button(label=_("Choose files…"), action_name="app.open-files")
             b_folder = Gtk.Button(label=_("Choose folder…"), action_name="app.open-folder")
@@ -668,15 +725,15 @@ def run_gui(argv, settings: Settings) -> int:
                 self.dropzone.add_css_class("compact")
             else:
                 self.dropzone = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
-                                        spacing=8)
+                                        spacing=SPACE_M)
                 icon = Gtk.Image.new_from_icon_name("document-open-symbolic")
                 icon.set_pixel_size(48)
-                icon.set_margin_top(20)
+                icon.set_margin_top(SIZE_DROP_AREA_PADDING)
                 title = Gtk.Label(label=_("Drop .p7m files or folders here"))
                 title.add_css_class("title-4")
                 hint = Gtk.Label(label=_("The original document is extracted next to the signed file"))
                 hint.add_css_class("dim-label")
-                btns.set_margin_bottom(20)
+                btns.set_margin_bottom(SIZE_DROP_AREA_PADDING)
                 for w in (icon, title, hint, btns):
                     self.dropzone.append(w)
             self.dropzone.add_css_class("dropzone")
@@ -717,7 +774,7 @@ def run_gui(argv, settings: Settings) -> int:
                 content.append(Gtk.Frame(child=scrolled))
 
             # --- bottom bar ------------------------------------------------
-            bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=SPACE_M)
             if use_adw:
                 set_margins(bottom, bottom=16, start=16, end=16)
             check = Gtk.CheckButton(label=_("Overwrite existing files"))
@@ -819,51 +876,87 @@ def run_gui(argv, settings: Settings) -> int:
             self.run_banner_action()
 
         def show_about(self):
-            if use_adw:  # AdwAboutDialog: the current GNOME about window
-                Adw.AboutDialog(
-                    application_name=APP_NAME, application_icon=APP_ID,
-                    version=__version__,
-                    comments=_("Extracts the original document from digitally "
-                               "signed files (.p7m, CAdES)."),
-                    website=f"https://github.com/{GITHUB_REPO}",
-                    issue_url=f"https://github.com/{GITHUB_REPO}/issues",
-                    license_type=Gtk.License.GPL_3_0,       # version 3 or later
-                    copyright="© 2026 Daniel Grasso",
-                    developer_name="Daniel Grasso",
-                    developers=["Daniel Grasso"],
-                    # Troubleshooting: what a report of a problem needs,
-                    # with the file the window's errors go to (app/diagnostics.py)
-                    debug_info=self._debug_info(),
-                    debug_info_filename=f"{APP_ID}-debug-info.txt",
-                ).present(self)
-                return
-            if self._about is None:  # built once, hidden on close
-                self._about = Gtk.AboutDialog(
-                    transient_for=self, modal=True, hide_on_close=True,
-                    program_name=APP_NAME, version=__version__,
-                    comments=_("Extracts the original document from digitally "
-                               "signed files (.p7m, CAdES)."),
-                    website=f"https://github.com/{GITHUB_REPO}",
-                    website_label=_("Project on GitHub"),
-                    license_type=Gtk.License.GPL_3_0,       # version 3 or later
-                    copyright="© 2026 Daniel Grasso",
-                    authors=["Daniel Grasso"],
-                    logo_icon_name=APP_ID,
-                )
-            self._about.present()
-
-        def _debug_info(self):
-            """The versions, the folders, the preferences and errors.log, in
-            the shared report's words (no secret, nothing of the files opened)."""
-            from types import SimpleNamespace
-
+            metadata = dict(
+                version=__version__, website=f"https://github.com/{GITHUB_REPO}",
+                comments=_("Extracts the original document from digitally signed files (.p7m, CAdES)."),
+                license_type=Gtk.License.GPL_3_0, copyright="© 2026 Daniel Grasso",
+            )
             from p7m_extractor.app import diagnostics
             s = self.settings
-            prefs = SimpleNamespace(theme=s.get("color_scheme"), language=s.get("language"),
-                                    check_updates=s.get_bool("check_updates"), notices=[])
-            toolkit = (f"GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}, "
-                       f"libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}.{Adw.get_micro_version()}")
-            return diagnostics.summary(APP_NAME, __version__, prefs, services.app_paths(), toolkit)
+            prefs = diagnostics.Preferences(theme=s.get("color_scheme"), language=s.get("language"),
+                                            check_updates=s.get_bool("check_updates"))
+            paths = services.app_paths()
+            toolkit = f"GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}"
+            if use_adw:
+                toolkit += (f", libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}"
+                            f".{Adw.get_micro_version()}")
+                dialog = about_widgets.about_dialog(
+                    dict(metadata, application_name=APP_NAME, application_icon=APP_ID,
+                         issue_url=f"https://github.com/{GITHUB_REPO}/issues",
+                         developer_name="Daniel Grasso", developers=["Daniel Grasso"]),
+                    prefs, paths, toolkit, run_in_thread, debug_filename=f"{APP_ID}-debug-info.txt",
+                )
+            else:
+                if self._about is None:
+                    self._about = Gtk.AboutDialog(
+                        **metadata, program_name=APP_NAME, authors=["Daniel Grasso"], logo_icon_name=APP_ID,
+                        hide_on_close=True, use_header_bar=False,
+                    )
+                    init_dialog(self._about)
+                dialog = self._about
+                report = diagnostics.summary(APP_NAME, __version__, prefs, paths, toolkit)
+                dialog.set_system_information(report)
+                run_in_thread(lambda: diagnostics.storage(paths),
+                              lambda text, error: dialog.set_system_information(
+                                  report + "\n" + (text if error is None else str(error))))
+            present_dialog(dialog, self)
+
+        def open_error_log(self):
+            paths = services.app_paths()
+            if use_adw:
+                about_widgets.open_error_log(paths, open_path, self.show_banner)
+                return
+            from p7m_extractor.app.errorlog import log_file
+            path = log_file(paths.state)
+            if path.is_file():
+                open_path(str(path))
+            else:
+                self.show_banner(_("No errors have been recorded."))
+
+        def show_update(self):
+            if self._update_cb:
+                self._update_cb()
+
+        def offer_update(self, version, show):
+            self._update_cb = show
+            if use_adw:
+                self.update_strip.set_title(update_widgets.update_title(APP_NAME, version))
+                self.update_strip.set_revealed(True)
+            else:
+                self.show_banner(_("Version {version} of {app} is available.").format(
+                    version=version, app=APP_NAME), _("Update…"), show)
+
+        def open_update(self, release):
+            if self._update_dialog is not None:
+                return
+            if use_adw:
+                dialog = SharedUpdateDialog(
+                    release, project=services.project(), app_name=APP_NAME, app_icon=APP_ID,
+                    layout=UpdateLayout(SIZE_UPDATE_WIDTH, SIZE_UPDATE_HEIGHT, SIZE_UPDATE_CONTENT,
+                                        SPACE_L, SPACE_XL),
+                    channel=updates.distribution_channel(), run_in_thread=run_in_thread,
+                    can_install=lambda: self._pending == 0, launch=self.launch_update,
+                )
+                dialog.connect("closed", lambda *_args: setattr(self, "_update_dialog", None))
+            else:
+                dialog = PlainUpdateDialog(self, release)
+                dialog.connect("close-request", lambda *_args: setattr(self, "_update_dialog", None) or False)
+            self._update_dialog = dialog
+            present_dialog(dialog, self)
+
+        def launch_update(self, installer):
+            subprocess.Popen(updates.installer_command(installer, restart=True), close_fds=True)
+            self.get_application().quit()
 
         # --- update check (Windows) -----------------------------------------
         def check_updates(self, manual):
@@ -872,7 +965,10 @@ def run_gui(argv, settings: Settings) -> int:
 
             def work():
                 try:
-                    rel = updates.latest_release(services.project())
+                    project = services.project()
+                    rel = updates.latest_release(project)
+                    if updates.is_newer(rel.version, __version__):
+                        rel = updates.with_localized_notes(project, rel, i18n.language())
                 except updates.UpdateError as e:
                     GLib.idle_add(self._update_result, None, str(e), manual)
                     return
@@ -885,14 +981,27 @@ def run_gui(argv, settings: Settings) -> int:
                     self.show_banner(_("Update check failed: {error}").format(error=err))
                 return False
             if updates.is_newer(rel.version, __version__):
+                def show():
+                    self.present()
+                    self.open_update(rel)
+
                 if manual:
                     self.hide_banner()
-                    UpdateDialog(self, rel).open()
+                if use_adw:
+                    update_widgets.announce_update(
+                        APP_NAME, rel.version, requested=manual, active=self.is_active(),
+                        banner=self.offer_update, show=show, notify=self.get_application().notify_update,
+                    )
                 else:
-                    self.show_banner(
-                        _("Version {version} of {app} is available.").format(
-                            version=rel.version, app=APP_NAME),
-                        _("Update…"), lambda: UpdateDialog(self, rel).open())
+                    self.offer_update(rel.version, show)
+                    if manual:
+                        show()
+                    elif not self.is_active():
+                        self.get_application().notify_update(
+                            _("Version {version} of {app} is available.").format(
+                                version=rel.version, app=APP_NAME),
+                            _("Click to see what is new and update."), tag="update", on_click=show,
+                        )
             elif manual:
                 self.show_banner(_("{app} {version} is up to date: no newer version.").format(
                     app=APP_NAME, version=__version__))
@@ -1013,9 +1122,9 @@ def run_gui(argv, settings: Settings) -> int:
                 if not files:
                     GLib.idle_add(self._set_summary, _("No .p7m files found."))
                 keys = [next(self._seq) for _f in files]
-                for key, f in zip(keys, files):  # every file shows up at once, queued
+                for key, f in zip(keys, files, strict=True):  # every file shows up at once, queued
                     GLib.idle_add(self._row_add, key, f)
-                for key, f in zip(keys, files):
+                for key, f in zip(keys, files, strict=True):
                     GLib.idle_add(self._row_call, key, "start")
                     try:
                         dest, layers = extract_file(f, self._overwrite,
@@ -1028,7 +1137,7 @@ def run_gui(argv, settings: Settings) -> int:
                 if self._checks_signatures():
                     # after the extractions, which never wait for the network
                     lists = config_dir() / "trusted-lists"
-                    for key, f in zip(keys, files):
+                    for key, f in zip(keys, files, strict=True):
                         GLib.idle_add(self._row_listed, key, "verifying")
                         try:
                             layers = verify.verify_file(f, online=True, lists_folder=lists)
@@ -1201,7 +1310,7 @@ def run_gui(argv, settings: Settings) -> int:
                              title=_("Default app"), default_width=440)
             init_dialog(self)
             self._parent = parent
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=SPACE_L)
             set_margins(box, 24)
             icon = Gtk.Image.new_from_icon_name(APP_ID)
             icon.set_pixel_size(64)
@@ -1255,27 +1364,20 @@ def run_gui(argv, settings: Settings) -> int:
             self._parent = parent
 
         def open(self):
-            if use_adw:
-                self.present(self._parent)
-            else:
-                self.present()
+            present_dialog(self, self._parent)
 
-    class UpdateDialog(Adw.Dialog if use_adw else Gtk.Window):
+    class PlainUpdateDialog(Gtk.Window):
         def __init__(self, parent, rel):
-            if use_adw:
-                super().__init__(title=_("Update available"), content_width=480)
-                self.connect("closed", self._on_close)
-            else:
-                super().__init__(transient_for=parent, modal=True, resizable=False,
-                                 title=_("Update available"), default_width=480)
-                init_dialog(self)
-                self.connect("close-request", self._on_close)
+            super().__init__(transient_for=parent, modal=True, resizable=True,
+                             title=_("Update available"),
+                             default_width=SIZE_UPDATE_WIDTH, default_height=SIZE_UPDATE_HEIGHT)
+            init_dialog(self)
+            self.connect("close-request", self._on_close)
             self._parent = parent
-            self._app = parent.get_application()
             self._rel = rel
             self._cancel = threading.Event()
 
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=SPACE_L)
             set_margins(box, 24)
             heading = Gtk.Label(label=_("{app} {version} is available").format(
                 app=APP_NAME, version=rel.version), xalign=0.0, wrap=True)
@@ -1286,8 +1388,10 @@ def run_gui(argv, settings: Settings) -> int:
             box.append(heading)
             box.append(sub)
             notes = rel.notes.strip()
+            if rel.notes_in_english:
+                box.append(Gtk.Label(label=_("Release notes in English"), xalign=0.0, wrap=True))
             if notes:
-                lbl = Gtk.Label(label=notes[:4000], xalign=0.0, yalign=0.0,
+                lbl = Gtk.Label(label=notes, xalign=0.0, yalign=0.0,
                                 wrap=True, selectable=True, max_width_chars=56)
                 set_margins(lbl, 8)
                 sc = Gtk.ScrolledWindow(child=lbl, min_content_height=120,
@@ -1317,23 +1421,11 @@ def run_gui(argv, settings: Settings) -> int:
                 self.action.connect("clicked", self._open_page)
             self.action.add_css_class("suggested-action")
             box.append(button_row(later, self.action))
-            if use_adw:
-                box.set_margin_top(6)       # right under the header bar
-                view = Adw.ToolbarView(content=box)
-                view.add_top_bar(Adw.HeaderBar())
-                self.set_child(view)
-            else:
-                self.set_child(box)
+            self.set_child(box)
             self.set_default_widget(self.action)
             # the notes are selectable: the dialog would open with them
             # focused and all their text selected
             self.set_focus(self.action)
-
-        def open(self):
-            if use_adw:
-                self.present(self._parent)
-            else:
-                self.present()
 
         def _on_close(self, _win):
             self._cancel.set()
@@ -1344,6 +1436,8 @@ def run_gui(argv, settings: Settings) -> int:
             self.close()
 
         def _download(self, _btn):
+            if self._parent._pending:
+                return self._on_error(_("Finish the current work before installing the update."))
             self.action.set_sensitive(False)
             self.progress.set_visible(True)
             self.progress.set_fraction(0)
@@ -1377,26 +1471,24 @@ def run_gui(argv, settings: Settings) -> int:
             return False
 
         def _on_downloaded(self, dest):
-            import subprocess
+            if self._cancel.is_set():
+                return False
+            if self._parent._pending:
+                return self._on_error(_("Finish the current work before installing the update."))
             self.status.set_label(_("Starting the installer…"))
             try:
-                # no wizard: the choices of the first installation are kept,
-                # Setup shows its progress and opens the app again (/RELAUNCH=1,
-                # read by installer/p7m-extractor.iss)
-                subprocess.Popen(updates.installer_command(dest) + ["/RELAUNCH=1"], close_fds=True)
-            except OSError as e:
-                self.status.set_label(_("Cannot start the installer: {error}").format(error=e))
-                self.action.set_sensitive(True)
-                return False
-            self._app.quit()  # let the installer replace the files in peace
+                self._parent.launch_update(dest)
+            except OSError as error:
+                self._on_error(str(error))
             return False
 
     # --- preferences --------------------------------------------------------
 
     class PreferencesWindow(Gtk.Window):
         def __init__(self, parent):
-            super().__init__(transient_for=parent, modal=True, resizable=False,
-                             title=_("Preferences"), default_width=540)
+            width, height = sizing.preference_size(600, 640, *available_size(parent))
+            super().__init__(transient_for=parent, modal=True, resizable=True,
+                             title=_("Preferences"), default_width=width, default_height=height)
             init_dialog(self)
             self._parent = parent
             self.handler_label = None
@@ -1404,7 +1496,7 @@ def run_gui(argv, settings: Settings) -> int:
                              ("light", _("Light")), ("dark", _("Dark")))
             self._languages = (("auto", _("Automatic (system language)")),
                                ("it", "Italiano"), ("en", "English"))
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=SPACE_M)
             set_margins(box, 24)
 
             box.append(self._section(_("Appearance")))
@@ -1427,11 +1519,18 @@ def run_gui(argv, settings: Settings) -> int:
                     _("Ask to become the default app at start-up"),
                     _("Only until {app} already opens .p7m files").format(app=APP_NAME),
                     self._switch("ask_default_app")))
-                general.append(self._row(
-                    _("Check for updates at start-up"),
+                box.append(Gtk.Frame(child=general))
+
+                box.append(self._section(_("Updates")))
+                update_rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+                update_rows.append(self._row(
+                    _("Check for updates automatically"),
                     _("Every 4 hours at most, from the project's GitHub Releases"),
                     self._switch("check_updates")))
-                box.append(Gtk.Frame(child=general))
+                check = Gtk.Button(label=_("Check for Updates…"))
+                check.connect("clicked", lambda *_args: (self.close(), parent.check_updates(manual=True)))
+                update_rows.append(self._row(_("Updates"), "", check))
+                box.append(Gtk.Frame(child=update_rows))
 
             if verify.available():
                 box.append(self._section(_("Signatures")))
@@ -1450,7 +1549,7 @@ def run_gui(argv, settings: Settings) -> int:
                     _("Default app for .p7m files"), handler_text(), set_btn,
                     return_subtitle=True)
                 shell.append(row)
-                reg = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
+                reg = Gtk.Box(spacing=SPACE_S, valign=Gtk.Align.CENTER)
                 b_reg = Gtk.Button(label=_("Register"))
                 b_reg.connect("clicked", self._on_register)
                 b_unreg = Gtk.Button(label=_("Remove"))
@@ -1462,7 +1561,7 @@ def run_gui(argv, settings: Settings) -> int:
                     _("“Extract content” entry on .p7m files and presence in the "
                       "app list (current user)"), reg))
                 box.append(Gtk.Frame(child=shell))
-            self.set_child(box)
+            self.set_child(Gtk.ScrolledWindow(child=box, hscrollbar_policy=Gtk.PolicyType.NEVER))
 
         @staticmethod
         def _dropdown(options, key, callback):
@@ -1486,7 +1585,7 @@ def run_gui(argv, settings: Settings) -> int:
         def _section(text):
             lbl = Gtk.Label(label=text, xalign=0.0)
             lbl.add_css_class("heading")
-            lbl.set_margin_top(8)
+            lbl.set_margin_top(SPACE_M)
             return lbl
 
         @staticmethod
@@ -1499,7 +1598,7 @@ def run_gui(argv, settings: Settings) -> int:
         @staticmethod
         def _row(title, subtitle, widget, return_subtitle=False):
             row = Gtk.ListBoxRow(activatable=False)
-            hbox = Gtk.Box(spacing=12)
+            hbox = Gtk.Box(spacing=SPACE_L)
             set_margins(hbox, top=8, bottom=8, start=12, end=12)
             texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True,
                             valign=Gtk.Align.CENTER)
@@ -1596,10 +1695,18 @@ def run_gui(argv, settings: Settings) -> int:
             group.add(switch(_("Ask to become the default app at start-up"),
                              _("Only until {app} already opens .p7m files").format(app=APP_NAME),
                              "ask_default_app"))
-            group.add(switch(_("Check for updates at start-up"),
-                             _("Every 4 hours at most, from the project's GitHub Releases"),
-                             "check_updates"))
             page.add(group)
+
+            def check_updates():
+                dialog.close()
+                parent.check_updates(manual=True)
+
+            group = update_widgets.update_preferences(
+                updates.distribution_channel(), settings.get_bool("check_updates"),
+                lambda enabled: settings.set("check_updates", enabled), check_updates,
+            )
+            if group is not None:
+                page.add(group)
 
             def then_refresh(action):
                 def run(row):
@@ -1620,7 +1727,9 @@ def run_gui(argv, settings: Settings) -> int:
             page.add(group)
 
         dialog.add(page)
-        dialog.present(parent)
+        if is_win:
+            fit_preferences(dialog, parent, available_size)
+        present_dialog(dialog, parent)
 
     # --- application --------------------------------------------------------
 
@@ -1636,6 +1745,18 @@ def run_gui(argv, settings: Settings) -> int:
                              flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
             self.settings = settings
             self.window = None
+            self._update_toasts = None
+
+        def notify_update(self, title, body, *, tag, on_click):
+            from p7m_extractor.app import log, wintoast
+            try:
+                if self._update_toasts is None:
+                    icon = f"{sys.executable},0" if getattr(sys, "frozen", False) else ""
+                    wintoast.register_app(APP_ID, APP_NAME, icon)
+                    self._update_toasts = wintoast.Toasts(APP_ID, SLUG)
+                self._update_toasts.show(title, body, tag, lambda: GLib.idle_add(on_click))
+            except (OSError, wintoast.WinRTError) as error:
+                log.complain("showing an update notification", error)
 
         def do_startup(self):
             nonlocal theme
@@ -1654,6 +1775,10 @@ def run_gui(argv, settings: Settings) -> int:
                     Gtk.IconTheme.get_for_display(display).add_search_path(str(icons))
             Gtk.Window.set_default_icon_name(APP_ID)
 
+            style = Gtk.CssProvider()
+            style.load_from_path(str(Path(__file__).with_name("style.css")))
+            Gtk.StyleContext.add_provider_for_display(
+                display, style, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             css = Gtk.CssProvider()
             css_data = _CSS_ADW if use_adw else _CSS
             try:  # GTK >= 4.12
@@ -1666,9 +1791,20 @@ def run_gui(argv, settings: Settings) -> int:
             Gtk.StyleContext.add_provider_for_display(
                 display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             theme = ThemeManager()
+            if is_win and use_adw:
+                windows = Gtk.Window.get_toplevels()
+
+                def watch_secondaries(model, first, _removed, count):
+                    for index in range(first, first + count):
+                        window = model.get_item(index)
+                        window.connect("map", lambda *_args: theme._title_bars(False))
+                        watch_dialog(window, Adw, hwnd_of)
+
+                windows.connect("items-changed", watch_secondaries)
 
             self._action("quit", lambda _a, _p: self.quit(), ["<Control>q"])
             self._action("about", lambda _a, _p: self._win().show_about())
+            self._action("error-log", lambda _a, _p: self._win().open_error_log())
             self._action("open-files", lambda _a, _p: self._win().on_pick_files(),
                          ["<Control>o"])
             self._action("open-folder", lambda _a, _p: self._win().on_pick_folder(),
