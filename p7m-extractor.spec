@@ -76,6 +76,10 @@ if WIN:
     gi_config.update(icons=['Adwaita'], languages=['en', 'en_US', 'it'])
     # GTK links GStreamer, but P7M never opens media.
     hooks['gstreamer'] = {'include_plugins': []}
+elif os.environ.get("P7M_LINUX_SOURCE_INPUTS"):
+    # The release uses distribution assets. GLib also searches /usr/local/share
+    # by default, which would bundle icons for unrelated apps on the build host.
+    os.environ["XDG_DATA_DIRS"] = "/usr/share"
 
 a = Analysis(
     [os.path.join(SPECPATH, 'build-aux', 'windows', 'p7m_extractor_main.py')],

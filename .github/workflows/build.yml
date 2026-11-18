@@ -186,27 +186,94 @@ jobs:
       - name: Update as the app does (silent, the app opens again)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $setup = (Get-ChildItem installer\Output -Filter 'p7m-extractor-setup-*.exe' | Select-Object -First 1).FullName
-          $opts = '/VERYSILENT', '/CURRENTUSER', '/SUPPRESSMSGBOXES', '/NORESTART'
-          # Start-Process -Wait would wait for the app Setup opens too
-          $p = Start-Process $setup -ArgumentList $opts -PassThru
-          if (-not $p.WaitForExit(300000) -or $p.ExitCode -ne 0) { Write-Error "install: $($p.ExitCode)"; exit 1 }
-          Start-Sleep 5
-          if (Get-Process p7m-extractor -ErrorAction SilentlyContinue) { Write-Error 'opened without /RELAUNCH=1'; exit 1 }
-          foreach ($restart in @(@('/RELAUNCH=1'), @('/RESTARTAPP=1'), @('/RELAUNCH=1','/RESTARTAPP=1'))) {
-            $p = Start-Process $setup -ArgumentList ($opts + $restart) -PassThru
-            if (-not $p.WaitForExit(300000) -or $p.ExitCode -ne 0) { Write-Error "update: $($p.ExitCode)"; exit 1 }
-            Start-Sleep 15
-            $app = @(Get-Process p7m-extractor -ErrorAction SilentlyContinue)
-            if ($app.Count -ne 1) { Write-Error "expected one reopen, got $($app.Count)"; exit 1 }
-            $installed = Split-Path $app[0].Path
-            $app | Stop-Process
+          $installed = Join-Path $env:RUNNER_TEMP 'p7m-install'
+          $exe = Join-Path $installed 'p7m-extractor.exe'
+          $logDir = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'p7m-setup-logs')
+          $opts = '/VERYSILENT', '/CURRENTUSER', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$installed`"", '/LOGCLOSEAPPLICATIONS'
+          function Find-App {
+            Get-Process p7m-extractor -ErrorAction SilentlyContinue | Where-Object Path -eq $exe
+          }
+          function Wait-ForWindow {
+            $deadline = [DateTime]::UtcNow.AddSeconds(30)
+            do {
+              $apps = @(Find-App)
+              if ($apps.Count -gt 1) { throw "Expected one app, found $($apps.Count)" }
+              if ($apps.Count -eq 1 -and $apps[0].MainWindowHandle -ne 0) { return $apps[0] }
+              Start-Sleep -Milliseconds 200
+            } while ([DateTime]::UtcNow -lt $deadline)
+            throw 'The app window did not open'
+          }
+          function Start-Setup($name, $switches) {
+            $script:log = Join-Path $logDir "$name.log"
+            Start-Process $setup -ArgumentList ($opts + $switches + "/LOG=`"$log`"") -PassThru
+          }
+          function Confirm-Setup($process, $name) {
+            # -Wait on Start-Process would wait for the app that Setup reopens.
+            if (-not $process.WaitForExit(300000)) { throw "$name timed out" }
+            if ($process.ExitCode -ne 0) { throw "$name failed with exit code $($process.ExitCode)" }
+          }
+          function Wait-ForSetupLog($process, $pattern, $seconds) {
+            $deadline = [DateTime]::UtcNow.AddSeconds($seconds)
+            while (!(Select-String -LiteralPath $log -Pattern $pattern -Quiet -ErrorAction SilentlyContinue)) {
+              if ($process.HasExited -or [DateTime]::UtcNow -ge $deadline) { throw "$log missed: $pattern" }
+              Start-Sleep -Milliseconds 100
+            }
+          }
+          try {
+            Confirm-Setup (Start-Setup 'install' @()) 'install'
+            Start-Sleep -Seconds 2
+            if (Find-App) { throw 'Silent install opened the app without an update flag' }
+            Add-Content (Join-Path $env:LOCALAPPDATA 'p7m-extractor/settings.ini') 'ask_default_app=false'
+            Start-Process $exe
+            $app = Wait-ForWindow
+            foreach ($name in 'legacy', 'pid', 'both-flags') {
+              $switches = switch ($name) {
+                'legacy' { '/RELAUNCH=1' }
+                'pid' { '/RESTARTAPP=1'; "/UPDATEPID=$($app.Id)" }
+                'both-flags' { '/RESTARTAPP=1'; '/RELAUNCH=1' }
+              }
+              $broker = $null
+              try {
+                # Keep a lock past the app's exit even if it shares another session broker.
+                if ($name -eq 'pid') {
+                  $broker = [IO.File]::Open((Join-Path $installed '_internal/gdbus.exe'), 'Open', 'Read', 'ReadWrite')
+                }
+                $p = Start-Setup $name @($switches)
+                Wait-ForSetupLog $p 'Waiting for update files' 30
+                Write-Host "$name waiting for app PID $($app.Id) and its bundled files"
+                if ($app.HasExited -or $p.HasExited) { throw "$name did not wait for the running app" }
+                if (!$app.CloseMainWindow() -or !$app.WaitForExit(10000)) { throw 'The app did not close' }
+                if ($broker) {
+                  Wait-ForSetupLog $p "Update PID $($app.Id) exited: 1" 10
+                  Wait-ForSetupLog $p 'Update file busy: .*gdbus\.exe' 10
+                }
+              } finally {
+                if ($broker) { $broker.Dispose() }
+              }
+              Confirm-Setup $p $name
+              $reopened = Wait-ForWindow
+              if ($reopened.Id -eq $app.Id) { throw "$name kept the original app" }
+              $app = $reopened
+            }
             $payload = Get-Content "dist/p7m-extractor/_internal/licenses/inventory.json" -Raw | ConvertFrom-Json -AsHashtable
             foreach ($file in $payload.payload.GetEnumerator()) {
               $actual = (Get-FileHash -LiteralPath (Join-Path $installed $file.Key)).Hash.ToLowerInvariant()
               if ($actual -ne $file.Value) { throw "Installer payload differs: $($file.Key)" }
             }
+          } finally {
+            Find-App | Stop-Process
+            Get-ChildItem $logDir -Filter '*.log' | ForEach-Object {
+              Write-Host "Setup log: $($_.Name)"
+              Select-String -LiteralPath $_.FullName -Pattern 'update files|Update PID|Update file busy|Restart Manager|Error|Exit code'
+            }
           }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-setup-logs
+          path: ${{ runner.temp }}/p7m-setup-logs/
       - uses: actions/upload-artifact@v7
         with:
           name: windows-x64

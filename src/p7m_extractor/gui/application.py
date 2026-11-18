@@ -955,7 +955,8 @@ def run_gui(argv, settings: Settings) -> int:
             present_dialog(dialog, self)
 
         def launch_update(self, installer):
-            subprocess.Popen(updates.installer_command(installer, restart=True), close_fds=True)
+            command = updates.installer_command(installer, restart=True)
+            subprocess.Popen([*command, f"/UPDATEPID={os.getpid()}"], close_fds=True)
             self.get_application().quit()
 
         # --- update check (Windows) -----------------------------------------

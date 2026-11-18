@@ -57,6 +57,8 @@ italian.VerbExtract=Estrai il contenuto con P7M Extractor
 english.VerbExtract=Extract content with P7M Extractor
 italian.AppDescription=Estrae il documento originale dai file firmati .p7m
 english.AppDescription=Extracts the original document from signed .p7m files
+italian.UpdateFilesInUse=Chiudi P7M Extractor e le applicazioni che usano i suoi file, quindi riprova l'aggiornamento.
+english.UpdateFilesInUse=Close P7M Extractor and any apps using its files, then try the update again.
 
 [Tasks]
 Name: "assocp7m"; Description: "{cm:TaskAssoc}"
@@ -119,10 +121,22 @@ Filename: "{app}\p7m-extractor.exe"; Description: "{cm:LaunchProgram,P7M Extract
 Filename: "{app}\p7m-extractor.exe"; Flags: nowait runasoriginaluser skipifnotsilent; Check: RelaunchAfterUpdate
 
 [Code]
+#include "update-wait.iss"
+
 function RelaunchAfterUpdate(): Boolean;
 begin
   Result := (ExpandConstant('{param:RESTARTAPP|0}') = '1') or
             (ExpandConstant('{param:RELAUNCH|0}') = '1');
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if WizardSilent and RelaunchAfterUpdate() then begin
+    if not WaitForUpdateFiles(ExpandConstant('{app}'),
+      ExpandConstant('{param:UPDATEPID|0}')) then
+      Result := CustomMessage('UpdateFilesInUse');
+  end;
 end;
 
 function AppLanguage(Param: String): String;
