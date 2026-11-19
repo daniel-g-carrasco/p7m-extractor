@@ -1,6 +1,6 @@
 [Flatpak Repo]
 Title=P7M Extractor
-Comment=Extract the original document from digitally signed .p7m files
+Comment=Extract and check signed .p7m documents
 Description=P7M Extractor unwraps CAdES (.p7m) digitally signed files and saves the original document, byte for byte, next to the signed one.
 Homepage=https://p7m.neistar.com
 Icon=https://daniel-g-carrasco.github.io/p7m-extractor/icon.png
