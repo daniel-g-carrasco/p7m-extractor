@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.png" alt="P7M Extractor" width="128" height="128">
+  <img src="data/icons/hicolor/scalable/apps/io.github.daniel_g_carrasco.p7m-extractor.svg" alt="P7M Extractor" width="160" height="160">
 </p>
 
 <h1 align="center">P7M Extractor</h1>
