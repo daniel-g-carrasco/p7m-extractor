@@ -16,6 +16,7 @@ from zipfile import BadZipFile, ZipFile
 
 from collect_sources import INVENTORY, verify_archive
 from package_inventory import sha256, verify_portable
+from release_inventory import SUFFIX, read_report
 
 INDEX = "release-sources.json"
 NOTES = "release-notes.it.md"
@@ -106,7 +107,7 @@ def finish(client, slug, tag, public_key):
         return "already published"
     expected = names(slug, tag)
     binaries = set(expected.values()) - {expected["sources"]}
-    signed = binaries | {expected["sources"]}
+    signed = binaries | {expected["sources"]} | {name + SUFFIX for name in binaries}
     mandatory = signed | {name + ".minisig" for name in signed} | {NOTES}
     assets = {asset["name"]: asset for asset in release["assets"] if asset.get("state", "uploaded") == "uploaded"}
     missing = mandatory - assets.keys()
@@ -122,6 +123,11 @@ def finish(client, slug, tag, public_key):
             for name, checksum in manifest["binaries"].items():
                 if assets[name].get("digest") != "sha256:" + checksum:
                     raise ValueError(f"release checksum differs from sources for {name}")
+                inventory = client.download(name + SUFFIX, Path(work))
+                signature = client.download(name + SUFFIX + ".minisig", Path(work))
+                subprocess.run(["minisign", "-V", "-P", public_key, "-m", str(inventory), "-x", str(signature)],
+                               check=True)
+                read_report(inventory, name, checksum)
             text = notes.read_text(encoding="utf-8")
             header, _, body = text.partition("\n")
             if header != f"<!-- release-notes: it {tag} -->" or not re.search(r"^[-*] +\S", body, re.M):

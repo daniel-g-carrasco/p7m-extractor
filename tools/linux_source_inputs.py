@@ -37,7 +37,7 @@ VENDORED = {
          "5a3d6b383ca5afc235b171118e90f5ff6aa27e9fea3303065231a6d403f0183a"),
         ("libiconv-1.18.tar.gz", "https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz",
          "3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8"),
-        ("zlib-1.3.2.tar.gz", "https://zlib.net/fossils/zlib-1.3.2.tar.gz",
+        ("zlib-1.3.2.tar.gz", "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz",
          "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"),
     )),
 }

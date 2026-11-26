@@ -5,8 +5,10 @@ the folders given.
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from p7m_extractor.core.names import _strip_p7m
+from p7m_extractor.data.atomic import replace_patiently
 from p7m_extractor.data.cms import BerError, decode_container, extract_econtent
 
 _CHUNK = 1 << 20  # 1 MiB: I/O granularity for progress reporting
@@ -47,11 +49,16 @@ def extract_file(src: Path, overwrite: bool = False, progress=None) -> tuple[Pat
     if dest.exists() and not overwrite:
         raise FileExistsError(str(dest))
     total = max(len(content), 1)
-    with open(dest, "wb") as out:
-        for i in range(0, len(content), _CHUNK):
-            out.write(content[i:i + _CHUNK])
-            if progress:
-                progress(0.5 + 0.5 * min(i + _CHUNK, total) / total)
+    with TemporaryDirectory(dir=dest.parent, prefix=".p7m-extractor-") as folder:
+        tmp = Path(folder) / "output"
+        with tmp.open("wb") as out:
+            for i in range(0, len(content), _CHUNK):
+                out.write(content[i:i + _CHUNK])
+                if progress:
+                    progress(0.5 + 0.5 * min(i + _CHUNK, total) / total)
+        if dest.exists() and not overwrite:
+            raise FileExistsError(str(dest))
+        replace_patiently(tmp, dest)
     if progress:
         progress(1.0)
     return dest, layers

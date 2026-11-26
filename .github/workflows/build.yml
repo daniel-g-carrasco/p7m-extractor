@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -274,32 +277,50 @@ jobs:
         with:
           name: windows-setup-logs
           path: ${{ runner.temp }}/p7m-setup-logs/
+      - name: Record Windows release components
+        run: |
+          python tools/release_inventory.py create --revision "$GITHUB_SHA" \
+            --gtk-inventory dist/p7m-extractor/_internal/licenses/inventory.json \
+            p7m-extractor-*-windows-x64-portable.zip installer/Output/p7m-extractor-setup-*.exe
       - uses: actions/upload-artifact@v7
         with:
           name: windows-x64
-          path: p7m-extractor-*-windows-x64-portable.zip
+          if-no-files-found: error
+          path: |
+            p7m-extractor-*-windows-x64-portable.zip
+            p7m-extractor-*-windows-x64-portable.zip.inventory.json
       - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
-          path: installer/Output/p7m-extractor-setup-*.exe
+          if-no-files-found: error
+          path: |
+            installer/Output/p7m-extractor-setup-*.exe
+            installer/Output/p7m-extractor-setup-*.exe.inventory.json
 
   linux:
     needs: test
     runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:24.04
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v7
       - name: Install GTK 4, libadwaita and PyGObject
         run: |
-          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get update
-          # The runner's Firefox is from a PPA whose sources are absent from
-          # Ubuntu's index. Keep its desktop assets out of the portable bundle.
-          if [ "$(dpkg-query -W -f='${db:Status-Status}' firefox 2>/dev/null)" = installed ]; then
-            sudo apt-get purge -y firefox
-          fi
-          sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
+          export DEBIAN_FRONTEND=noninteractive
+          # Keep the bundled libraries and their source indexes in step.
+          sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+          apt-get update
+          apt-get upgrade -y --no-install-recommends
+          apt-get install -y git ca-certificates python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
             gir1.2-adw-1 libadwaita-1-0 libgtk-4-1 libgtk-4-bin python3-venv \
             libpython3.12 libglib2.0-bin binutils python3-setuptools python3-packaging
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Trust the runner-owned checkout inside the container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build with PyInstaller
         env:
           P7M_LINUX_SOURCE_INPUTS: "1"
@@ -371,10 +392,29 @@ jobs:
             --binary p7m-extractor-*-linux-x64-portable.tar.gz --inputs build/p7m-extractor/linux-inputs.json \
             --pip-report "$RUNNER_TEMP/python-install.json" --cache "$RUNNER_TEMP/portable-sources" \
             --output linux-portable-sources.zip
+      - name: Record Linux portable components from the build inputs
+        run: |
+          python3 - > "$RUNNER_TEMP/p7m-linux-python.json" <<'PY'
+          import json
+          from pathlib import Path
+
+          inputs = Path("build/p7m-extractor/linux-inputs.json")
+          components = json.loads(inputs.read_text(encoding="utf-8"))["components"]
+          wheels = [{"name": name, "version": version}
+                    for name, (kind, version) in components.items() if kind == "wheel"]
+          if "pyhanko" not in {row["name"] for row in wheels}:
+              raise SystemExit("Build inventory has no pyHanko component")
+          print(json.dumps(wheels))
+          PY
+          python3 tools/release_inventory.py create --revision "$GITHUB_SHA" \
+            --linux-inventory "$RUNNER_TEMP/p7m-linux-python.json" p7m-extractor-*-linux-x64-portable.tar.gz
       - uses: actions/upload-artifact@v7
         with:
           name: linux-x64
-          path: p7m-extractor-*-linux-x64-portable.tar.gz
+          if-no-files-found: error
+          path: |
+            p7m-extractor-*-linux-x64-portable.tar.gz
+            p7m-extractor-*-linux-x64-portable.tar.gz.inventory.json
       - uses: actions/upload-artifact@v7
         with:
           name: linux-portable-sources
@@ -408,10 +448,17 @@ jobs:
               --sdk "$(flatpak info --show-commit org.gnome.Sdk//50)" \
               --runtime "$(flatpak info --show-commit org.gnome.Platform//50)" \
               --cache "$RUNNER_TEMP/flatpak-sources" --output flatpak-sources.zip
+      - name: Record Flatpak components
+        run: |
+          python3 tools/release_inventory.py create --revision "$GITHUB_SHA" \
+            --flatpak build-dir p7m-extractor-*-linux-x64.flatpak
       - uses: actions/upload-artifact@v7
         with:
           name: flatpak
-          path: p7m-extractor-*-linux-x64.flatpak
+          if-no-files-found: error
+          path: |
+            p7m-extractor-*-linux-x64.flatpak
+            p7m-extractor-*-linux-x64.flatpak.inventory.json
       - uses: actions/upload-artifact@v7
         with:
           name: flatpak-sources
@@ -432,10 +479,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
           pattern: "{windows-x64,windows-installer,linux-x64,flatpak}"
+      - name: Verify package inventories and check advisories
+        run: |
+          packages=(
+            "p7m-extractor-setup-$GITHUB_REF_NAME-windows-x64.exe"
+            "p7m-extractor-$GITHUB_REF_NAME-windows-x64-portable.zip"
+            "p7m-extractor-$GITHUB_REF_NAME-linux-x64-portable.tar.gz"
+            "p7m-extractor-$GITHUB_REF_NAME-linux-x64.flatpak"
+          )
+          python3 tools/release_inventory.py check --revision "$GITHUB_SHA" "${packages[@]}"
+          python3 tools/release_inventory.py audit "${packages[@]}"
       - name: Sign with the project's key (minisign), checked before anything is uploaded
         # the installed app runs an update only with this signature (the same
         # public key is in the code); the comment names the file, so another
@@ -453,7 +512,7 @@ jobs:
              *) printf 'untrusted comment: releases\n%s\n' "$MINISIGN_SECRET_KEY" ;;
            esac | tr -d '\r' > "$key")
           ls *-setup-v*-windows-x64.exe
-          for f in *.zip *.tar.gz *.exe *.flatpak; do
+          for f in *.zip *.tar.gz *.exe *.flatpak *.inventory.json; do
             [ -f "$f" ] || continue
             minisign -S -s "$key" -m "$f" -x "$f.minisig" -t "timestamp:$(date +%s) file:$f hashed" </dev/null
             minisign -V -P "$PUBLIC_KEY" -m "$f" -x "$f.minisig"
@@ -470,5 +529,7 @@ jobs:
             *.tar.gz
             *.exe
             *.flatpak
+            *.inventory.json
             *.minisig
             release-notes.it.md
+          fail_on_unmatched_files: true
