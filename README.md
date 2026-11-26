@@ -276,6 +276,15 @@ output directory `site`).
 
 ## Development
 
+Pull requests run the template's Ruff security rules and redacted Gitleaks
+scan. Before signing, the build verifies the inventories for the installer,
+portable archives, and Flatpak bundle and checks eligible components in OSV.
+The draft requires the signed inventories before it can be published. Pages
+checks the inventory of the exact signed bundle it imports. The weekly audit
+checks both distribution channels and reports missing inventories for older
+releases. The corresponding-source archive carries the detailed native build
+inputs for the Linux portable package.
+
 The code is the package `src/p7m_extractor/`, in four layers with the
 imports going one way only: `core/` (plain logic), `data/` (the .p7m
 container, bytes in and bytes out), `app/` (extraction of a file, the check

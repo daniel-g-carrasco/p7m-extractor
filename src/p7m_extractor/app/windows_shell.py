@@ -176,5 +176,5 @@ def win_make_default() -> str:
     # Since Windows 10 only the user can change a protected default, through
     # Settings. This deep link lands on our app's page (Windows 11) or on the
     # Default apps page (Windows 10).
-    os.startfile(f"ms-settings:defaultapps?registeredAppUser={quote(APP_NAME)}")
+    os.startfile(f"ms-settings:defaultapps?registeredAppUser={quote(APP_NAME)}")  # noqa: S606 - fixed Settings URI
     return "settings"

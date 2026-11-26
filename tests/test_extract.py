@@ -119,6 +119,18 @@ def main() -> int:
         # progress climbs monotonically from the read phase to 1.0
         assert seen == sorted(seen) and seen[-1] == 1.0 and 0.0 < seen[0] <= 0.5
 
+        previous = b"previous extraction"
+        dest.write_bytes(previous)
+
+        def stop_during_write(fraction):
+            if fraction > 0.5:
+                raise InterruptedError("cancelled")
+
+        expect_raises(InterruptedError, extract.extract_file, f, True, stop_during_write)
+        assert dest.read_bytes() == previous
+        assert f.read_bytes() == p7m_streaming(PAYLOAD)
+        assert not list(td.glob(".p7m-extractor-*"))
+
         # folder scan finds .p7m case-insensitively, recursively
         (td / "sub").mkdir()
         upper = td / "sub" / "UPPER.XML.P7M"

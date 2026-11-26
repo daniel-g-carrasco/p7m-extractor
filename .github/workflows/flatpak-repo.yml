@@ -92,7 +92,8 @@ jobs:
         run: |
           bundle="p7m-extractor-${RELEASE_TAG}-linux-x64.flatpak"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern "$bundle" --pattern "$bundle.minisig"
+            --pattern "$bundle" --pattern "$bundle.minisig" \
+            --pattern "$bundle.inventory.json" --pattern "$bundle.inventory.json.minisig"
           PYTHONPATH=src python3 - "$bundle" <<'PY'
           import sys
           from pathlib import Path
@@ -101,15 +102,29 @@ jobs:
           from p7m_extractor.app import minisign
 
           bundle = Path(sys.argv[1])
-          digest = minisign.blake2b()
-          with bundle.open("rb") as stream:
-              for block in iter(lambda: stream.read(1024 * 1024), b""):
-                  digest.update(block)
-          signature = bundle.with_suffix(".flatpak.minisig").read_text(encoding="utf-8")
-          print("Signature verified:", minisign.verify(digest.digest(), signature, PUBLIC_KEY))
+          for artifact in (bundle, bundle.with_name(bundle.name + ".inventory.json")):
+              digest = minisign.blake2b()
+              with artifact.open("rb") as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(block)
+              signature = artifact.with_name(artifact.name + ".minisig").read_text(encoding="utf-8")
+              print("Signature verified:", minisign.verify(digest.digest(), signature, PUBLIC_KEY))
           PY
           flatpak build-import-bundle --no-update-summary \
             --gpg-sign="$FLATPAK_GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" pages/repo "$bundle"
+          PYTHONPATH=tools python3 - "$bundle" "$(git rev-parse HEAD)" <<'PY'
+          import sys
+          from pathlib import Path
+
+          from release_inventory import check, create_pages_report
+
+          bundle, revision = Path(sys.argv[1]), sys.argv[2]
+          report, = check([bundle], revision=revision)
+          components = [(row["ecosystem"], row["name"], row["version"]) for row in report["components"]]
+          create_pages_report(Path("pages"), "io.github.daniel_g_carrasco.p7m-extractor", revision, components)
+          PY
+          python3 tools/release_inventory.py pages-audit --pages pages \
+            --app-id io.github.daniel_g_carrasco.p7m-extractor
           flatpak build-update-repo --generate-static-deltas --prune --prune-depth=3 \
             --gpg-sign="$FLATPAK_GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" pages/repo
           ostree refs --repo=pages/repo
