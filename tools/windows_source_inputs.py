@@ -20,7 +20,6 @@ them from.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import time
@@ -30,7 +29,8 @@ from urllib.parse import quote, unquote, urlsplit
 from urllib.request import Request, urlopen
 from zipfile import ZipFile
 
-from collect_sources import relative_path, tar_reader, wanted_components
+from collect_sources import relative_path, stream_digest, tar_reader, wanted_components
+from package_inventory import sha256
 
 BINARY_REPO = "https://repo.msys2.org/mingw/ucrt64"
 SOURCE_REPO = "https://repo.msys2.org/mingw/sources"
@@ -41,14 +41,6 @@ PYPI = "https://pypi.org/pypi"
 KEYRING_SHA256 = "1257d4ccc536c53333445a618039af4c3ea3f56b96601de9af89151ea529c19a"
 CHUNK = 1 << 20
 ATTEMPTS = 3
-
-
-def sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as stream:
-        while chunk := stream.read(CHUNK):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def check_keyring(path):
@@ -122,7 +114,7 @@ def archive_members(path, zstd="zstd"):
                 if name in found:
                     raise ValueError(f"duplicate archive member: {name}")
                 with archive.open(info) as stream:
-                    found[name] = _digest(stream)
+                    found[name] = stream_digest(stream)
         return found
     with tar_reader(path, zstd) as archive:
         for entry in archive:
@@ -132,15 +124,8 @@ def archive_members(path, zstd="zstd"):
             if name in found:
                 raise ValueError(f"duplicate archive member: {name}")
             with archive.extractfile(entry) as stream:
-                found[name] = _digest(stream)
+                found[name] = stream_digest(stream)
     return found
-
-
-def _digest(stream):
-    digest = hashlib.sha256()
-    while chunk := stream.read(CHUNK):
-        digest.update(chunk)
-    return digest.hexdigest()
 
 
 def adapter_receipt(component, rows, source, zstd="zstd"):
