@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from urllib.parse import quote
 from zipfile import BadZipFile, ZipFile
 
 from collect_sources import INVENTORY, verify_archive
@@ -138,6 +137,14 @@ def finish(client, slug, tag, public_key):
     return f"release {tag} published"
 
 
+def pick_release(pages, tag):
+    """The one release (draft or published) with this tag, from the API's pages."""
+    found = [release for page in pages for release in page if release.get("tag_name") == tag]
+    if len(found) != 1:
+        raise ValueError(f"expected one release for {tag}, found {len(found)}")
+    return found[0]
+
+
 class GitHub:
     def __init__(self, repo, tag):
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
@@ -145,7 +152,11 @@ class GitHub:
         self.repo, self.tag = repo, tag
 
     def view(self):
-        return json.loads(subprocess.check_output(["gh", "api", f"repos/{self.repo}/releases/tags/{quote(self.tag)}"]))
+        # GitHub's "release by tag" answers for published releases only: a
+        # draft is found in the list of releases, by its tag name.
+        pages = json.loads(subprocess.check_output(
+            ["gh", "api", "--paginate", "--slurp", f"repos/{self.repo}/releases?per_page=100"]))
+        return pick_release(pages, self.tag)
 
     def download(self, name, folder):
         subprocess.run(["gh", "release", "download", self.tag, "--repo", self.repo,

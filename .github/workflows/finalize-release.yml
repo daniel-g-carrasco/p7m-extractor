@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write      # starts Flatpak repository for the published release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -45,3 +46,6 @@ jobs:
             "release $RELEASE_TAG published"|"already published") ;;
             *) exit 1 ;;
           esac
+          # a release published with this job's token starts no other
+          # workflow by itself: the Flatpak repository is asked for it
+          gh workflow run flatpak-repo.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$RELEASE_TAG"
