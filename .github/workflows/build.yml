@@ -67,7 +67,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: zip curl
+          install: zip curl zstd git  # zstd and git: collect_sources.py reads MSYS2 sources, some pinned to a Git commit
       - name: Install the verified UCRT64 build inputs
         run: |
           set -euo pipefail
@@ -296,6 +296,36 @@ jobs:
           path: |
             installer/Output/p7m-extractor-setup-*.exe
             installer/Output/p7m-extractor-setup-*.exe.inventory.json
+      - name: Archive the built commit for its corresponding sources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          git archive --format=zip --output build/project-git.zip HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Corresponding sources for this exact bundle
+        # The MSYS2 packages, the wheels' source distributions and the
+        # project, fetched by name and version from fixed origins, then
+        # verified by collect_sources.py against the pinned MSYS2 keyring,
+        # the binaries' BUILDINFO and every declared checksum.
+        run: |
+          set -euo pipefail
+          python tools/windows_source_inputs.py \
+            --inventory dist/p7m-extractor/_internal/licenses/inventory.json \
+            --msys2-lock build-aux/windows/msys2-packages.lock \
+            --keyring build-aux/windows/msys2-keyring/msys2.gpg \
+            --project-archive build/project-git.zip \
+            --cache build/windows-source-inputs
+          python tools/collect_sources.py --bundle dist/p7m-extractor \
+            --inputs build/windows-source-inputs/inputs.json \
+            --keyring build-aux/windows/msys2-keyring/msys2.gpg \
+            --output build/windows-sources.zip
+          python tools/collect_sources.py --verify build/windows-sources.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-sources
+          if-no-files-found: error
+          compression-level: 0
+          path: build/windows-sources.zip
 
   linux:
     needs: test
@@ -477,6 +507,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write      # starts Flatpak repository for the published release
     steps:
       - uses: actions/checkout@v7
         with:
@@ -495,6 +526,27 @@ jobs:
           )
           python3 tools/release_inventory.py check --revision "$GITHUB_SHA" "${packages[@]}"
           python3 tools/release_inventory.py audit "${packages[@]}"
+      - uses: actions/download-artifact@v8
+        with:
+          path: sources
+          merge-multiple: true
+          pattern: "{windows-sources,flatpak-sources,linux-portable-sources}"
+      - name: The corresponding-source download, bound to these binaries
+        # signed below with the other files; Finalize (and the last step
+        # here) publish the draft only when it matches the binaries
+        run: |
+          sudo apt-get install -y -qq zstd
+          tag="$GITHUB_REF_NAME"
+          python3 tools/release_gate.py assemble --slug p7m-extractor --tag "$tag" \
+            --windows sources/windows-sources.zip \
+            --linux sources/flatpak-sources.zip \
+            --linux-portable-sources sources/linux-portable-sources.zip \
+            --installer "p7m-extractor-setup-$tag-windows-x64.exe" \
+            --portable "p7m-extractor-$tag-windows-x64-portable.zip" \
+            --flatpak "p7m-extractor-$tag-linux-x64.flatpak" \
+            --linux-portable "p7m-extractor-$tag-linux-x64-portable.tar.gz" \
+            --output "p7m-extractor-$tag-sources.zip"
+          rm -rf sources
       - name: Sign with the project's key (minisign), checked before anything is uploaded
         # the installed app runs an update only with this signature (the same
         # public key is in the code); the comment names the file, so another
@@ -533,3 +585,20 @@ jobs:
             *.minisig
             release-notes.it.md
           fail_on_unmatched_files: true
+      - name: Published when every file is there
+        # the same check as Finalize a complete draft: binaries, inventories,
+        # the source download and their signatures, the Italian notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIC_KEY: RWRF+AifJvn/zhz0o7MBObIYHgw9+sWoc4GaBK+qYnJY0AqeJm540y0a
+        run: |
+          result="$(python3 tools/release_gate.py publish-if-complete --slug p7m-extractor --tag "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" --public-key "$PUBLIC_KEY")"
+          echo "$result"
+          case "$result" in
+            "release $GITHUB_REF_NAME published"|"already published") ;;
+            *) exit 1 ;;
+          esac
+          # a release published with this job's token starts no other
+          # workflow by itself: the Flatpak repository is asked for it
+          gh workflow run flatpak-repo.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$GITHUB_REF_NAME"
