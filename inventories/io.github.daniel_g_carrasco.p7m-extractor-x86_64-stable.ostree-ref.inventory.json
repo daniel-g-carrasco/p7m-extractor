@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "artifact": "io.github.daniel_g_carrasco.p7m-extractor-x86_64-stable.ostree-ref",
+  "sha256": "e3934b78b49442a3c53752770851253fe57701a19c103e04f7f2d4590ac5bd24",
+  "revision": "e6d8784f11585c443635259562117d0cfd351e54",
+  "platform": "flatpak",
+  "components": [
+    {
+      "ecosystem": "Flatpak",
+      "name": "org.gnome.Platform/x86_64/50",
+      "version": "47406407f781b156c267b67c78a80a60715c0ff34ab2c051029c61d65fe86c11"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "aiohttp",
+      "version": "3.14.5"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "aiosignal",
+      "version": "1.4.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "asn1crypto",
+      "version": "1.5.1"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "attrs",
+      "version": "26.1.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "certifi",
+      "version": "2026.10.23"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "cffi",
+      "version": "2.1.1"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "cryptography",
+      "version": "50.0.2"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "frozenlist",
+      "version": "1.8.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "idna",
+      "version": "3.20"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "lxml",
+      "version": "6.1.3"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "multidict",
+      "version": "7.2.1"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "oscrypto",
+      "version": "1.3.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "propcache",
+      "version": "0.5.4"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "pycparser",
+      "version": "3.12"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "pyhanko",
+      "version": "0.38.1"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "pyhanko-certvalidator",
+      "version": "0.33.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "signxml",
+      "version": "5.2.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "typing-extensions",
+      "version": "4.16.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "tzlocal",
+      "version": "5.4.5"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "uritools",
+      "version": "7.0.0"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "xsdata",
+      "version": "26.10"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "yarl",
+      "version": "1.25.1"
+    }
+  ],
+  "ostree_commit": "789dd0164f54e6c8c9e7b20de8e3de150482bda53dd27e82a7669cc7fe19a7e8"
+}
