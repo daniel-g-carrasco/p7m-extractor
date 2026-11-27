@@ -86,6 +86,12 @@
   </screenshots>
 
   <releases>
+    <release version="1.5.3" date="2026-11-27">
+      <description>
+        <p>The extracted file is written whole or not at all: an extraction that stops halfway no longer leaves a cut file, and a file created meanwhile with the same name is not overwritten.</p>
+        <p>The download of the corresponding sources is now put together and signed by the automated build, for Windows too.</p>
+      </description>
+    </release>
     <release version="1.5.2" date="2026-11-18">
       <description>
         <p>On Windows, secondary windows use the system title bar. The new update window shows the release notes in Italian when the app is set to Italian. Preferences and Signatures share the layout of the other windows.</p>

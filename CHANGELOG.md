@@ -4,6 +4,21 @@ What changes for the user from one version to the next. The notes of the
 versions up to 1.4.0 are on the
 [releases page](https://github.com/daniel-g-carrasco/p7m-extractor/releases).
 
+## [1.5.3] - 2026-11-27
+
+### Fixed
+
+- The extracted file is written whole or not at all: it is first written
+  next to the destination under a temporary name and then put in place.
+  An extraction that stops halfway (a full disk, the program closed) no
+  longer leaves a cut file with the document's name, and a file with that
+  name created meanwhile is not overwritten.
+
+### Changed
+
+- The download of the corresponding sources, offered with each release, is
+  now put together and signed by the automated build, for Windows too.
+
 ## [1.5.2] - 2026-11-18
 
 ### Changed

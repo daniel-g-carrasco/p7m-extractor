@@ -1,5 +1,21 @@
 # Note di versione
 
+## [1.5.3] - 2026-11-27
+
+### Correzioni
+
+- Il file estratto viene scritto per intero o per niente: prima con un
+  nome provvisorio accanto alla destinazione, poi messo al suo posto.
+  Un'estrazione interrotta a metà (disco pieno, programma chiuso) non
+  lascia più un file troncato con il nome del documento, e un file con
+  quel nome comparso nel frattempo non viene sovrascritto.
+
+### Modifiche
+
+- L'archivio dei sorgenti corrispondenti, offerto con ogni versione, ora
+  viene composto e firmato dalla compilazione automatica, anche per
+  Windows.
+
 ## [1.5.2] - 2026-11-18
 
 ### Modifiche
