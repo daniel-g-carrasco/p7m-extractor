@@ -42,7 +42,8 @@ jobs:
           result="$(python3 tools/release_gate.py publish-if-complete --slug p7m-extractor --tag "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" --public-key "$PUBLIC_KEY")"
           echo "$result"
-          case "$result" in
+          # the verdict is the last line: gh and minisign print theirs before it
+          case "$(printf '%s\n' "$result" | tail -n 1)" in
             "release $RELEASE_TAG published"|"already published") ;;
             *) exit 1 ;;
           esac
