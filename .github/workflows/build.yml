@@ -67,7 +67,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: zip curl zstd
+          install: zip curl zstd git  # zstd and git: collect_sources.py reads MSYS2 sources, some pinned to a Git commit
       - name: Install the verified UCRT64 build inputs
         run: |
           set -euo pipefail
