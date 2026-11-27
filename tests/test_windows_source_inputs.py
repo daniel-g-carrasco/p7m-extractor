@@ -6,7 +6,9 @@ import io
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
@@ -59,6 +61,23 @@ class WindowsSourceInputsTest(unittest.TestCase):
         target.write_bytes(b"something else")
         with self.assertRaisesRegex(ValueError, "checksum differs"):
             wsi.fetch("https://example.invalid/file", target, hashlib.sha256(b"expected").hexdigest())
+
+    def test_a_source_shared_by_two_components_is_downloaded_once(self):
+        # gcc-libs and libwinpthread come from the same MSYS2 base, gcc: the
+        # two receipts ask for the same source package at the same time
+        calls = []
+
+        def slow(request, timeout):
+            calls.append(request.full_url)
+            time.sleep(0.2)
+            return io.BytesIO(b"source")
+
+        target = self.tmp / "mingw-w64-gcc-1-1.src.tar.zst"
+        with mock.patch.object(wsi, "urlopen", slow), ThreadPoolExecutor(max_workers=2) as pool:
+            done = list(pool.map(lambda _: wsi.fetch("https://example.invalid/gcc", target), range(2)))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(done, [target, target])
+        self.assertEqual(target.read_bytes(), b"source")
 
     def test_the_keyring_is_the_pinned_one(self):
         wsi.check_keyring(KEYRING)

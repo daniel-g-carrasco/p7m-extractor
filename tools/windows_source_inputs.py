@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
@@ -61,8 +62,23 @@ def read_lock(path):
     return pins
 
 
+_LOCKS: dict[Path, threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _lock(target):
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(Path(target).resolve(), threading.Lock())
+
+
 def fetch(url, target, checksum=None):
-    """Download url to target (once: an existing file is checked again)."""
+    """Download url to target, once: two components built from the same
+    MSYS2 base share a source package, and wait for each other here."""
+    with _lock(target):
+        return _fetch(url, target, checksum)
+
+
+def _fetch(url, target, checksum):
     if not target.exists():
         part = target.with_name(target.name + ".part")
         for attempt in range(1, ATTEMPTS + 1):
