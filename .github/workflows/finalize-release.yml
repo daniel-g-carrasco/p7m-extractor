@@ -1,0 +1,47 @@
+name: Finalize a complete draft
+
+# Run by hand once a tag's draft holds every file: the binaries and their
+# inventories from the Build workflow, the corresponding-source archive with
+# its signature and the Italian notes. tools/release_gate.py checks all of it
+# (signatures, digests against the source archive, inventories) and publishes
+# the draft only when it is complete; otherwise it says what is missing and
+# the release stays a draft.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag whose verified source download has been attached
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - name: Install minisign
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq minisign
+      - name: Verify and publish the complete draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          PUBLIC_KEY: RWRF+AifJvn/zhz0o7MBObIYHgw9+sWoc4GaBK+qYnJY0AqeJm540y0a
+        run: |
+          result="$(python3 tools/release_gate.py publish-if-complete --slug p7m-extractor --tag "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" --public-key "$PUBLIC_KEY")"
+          echo "$result"
+          case "$result" in
+            "release $RELEASE_TAG published"|"already published") ;;
+            *) exit 1 ;;
+          esac

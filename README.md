@@ -285,6 +285,39 @@ checks both distribution channels and reports missing inventories for older
 releases. The corresponding-source archive carries the detailed native build
 inputs for the Linux portable package.
 
+### Releases
+
+A release starts from a `v*` tag on a commit of `main` whose version is in
+`src/p7m_extractor/__init__.py`, `CHANGELOG.md`, `CHANGELOG.it.md` and the
+metainfo. What happens then, and what is still done by hand:
+
+1. **Build** (on the tag) tests, builds the Windows installer and portable
+   zip, the Linux portable archive and the Flatpak bundle, checks their
+   inventories, signs every file with the project's minisign key (the
+   `MINISIGN_SECRET_KEY` secret) and puts them in a **draft** release, with
+   the English notes and `release-notes.it.md`. It also keeps, as workflow
+   artifacts, the corresponding sources of the two Linux packages
+   (`flatpak-sources.zip`, `linux-portable-sources.zip`).
+2. **Not automated yet: the corresponding sources for Windows.** The
+   Windows sources (the MSYS2 source packages of the bundled libraries,
+   checked against MSYS2's signatures with `tools/collect_sources.py`) are
+   collected outside the CI, from inputs and a keyring that are not in this
+   repository. The three platform archives are then combined with
+   `tools/release_gate.py assemble` into `p7m-extractor-vX.Y.Z-sources.zip`,
+   which is signed with the same minisign key and attached to the draft with
+   its `.minisig`. Up to 1.5.2 this step was done by hand.
+3. **Finalize a complete draft** (run by hand, with the tag) checks the
+   draft with `tools/release_gate.py publish-if-complete`: every binary, its
+   inventory and their signatures, the source archive and its signature, the
+   digests of the binaries against the source archive and the Italian notes.
+   Only then is the draft published as the latest release; otherwise the run
+   fails, says what is missing and the release stays a draft.
+4. Publishing the release starts **Flatpak repository**, which adds the
+   signed bundle to the Flatpak repository on GitHub Pages.
+
+So, until the Windows sources are collected by the CI, a release stays a
+draft after step 1 and cannot be finished without step 2.
+
 The code is the package `src/p7m_extractor/`, in four layers with the
 imports going one way only: `core/` (plain logic), `data/` (the .p7m
 container, bytes in and bytes out), `app/` (extraction of a file, the check
